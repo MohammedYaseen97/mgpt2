@@ -65,8 +65,8 @@ class Block(nn.Module):
         self.mlp = MLP(config)
     
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        x = x + self.attn(self.ln_1(x)) # (B, T, C)
+        x = x + self.mlp(self.ln_2(x)) # (B, T, C)
         return x
 
 class GPT(nn.Module):
@@ -75,12 +75,12 @@ class GPT(nn.Module):
         self.config = config
         
         self.transformer = nn.ModuleDict(dict(
-            wte=nn.Embedding(config.vocab_size, config.n_embd),
-            wpe=nn.Embedding(config.block_size, config.n_embd),
-            h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-            ln_f=nn.LayerNorm(config.n_embd),
+            wte=nn.Embedding(config.vocab_size, config.n_embd), # token embedding table
+            wpe=nn.Embedding(config.block_size, config.n_embd), # position embedding table
+            h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]), # transformer layers
+            ln_f=nn.LayerNorm(config.n_embd), # final layer norm
         ))
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False) # language modeling head
 
         # weight sharing scheme
         self.transformer.wte.weight = self.lm_head.weight
@@ -96,8 +96,7 @@ class GPT(nn.Module):
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            std = 0.02
-            torch.nn.init.normal_(module.weight, mean=0.0, std=std)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
     
     def forward(self, idx, targets=None):
         B, T = idx.size() # (B, T) = batch size, sequence length
