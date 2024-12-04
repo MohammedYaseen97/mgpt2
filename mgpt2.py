@@ -207,6 +207,7 @@ train_loader = DataLoaderLite(B=16, T=1024)
 # model = GPT.from_pretrained('gpt2')
 model = GPT(GPTConfig())
 model.to(device)
+model = torch.compile(model)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
