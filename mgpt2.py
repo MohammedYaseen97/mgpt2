@@ -227,7 +227,15 @@ torch.manual_seed(1337)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(1337)
 
-train_loader = DataLoaderLite(B=16, T=1024)
+total_batch_size = 524288 # ~0.5M tokens
+B=16 # micro batch size
+T=1024 # sequence length
+assert total_batch_size % (B*T) == 0, f"total_batch_size must be divisible by (B*T)"
+grad_accum_steps = total_batch_size // (B*T)
+print(f"total desired batch size: {total_batch_size}")
+print(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
+
+train_loader = DataLoaderLite(B=B, T=T)
 
 # model = GPT.from_pretrained('gpt2')
 model = GPT(GPTConfig(vocab_size=50304))
@@ -257,12 +265,17 @@ torch.set_float32_matmul_precision('high')
 
 for step in range(max_steps):
     t0 = time.time()
-    x, y = train_loader.next_batch()
-    x, y = x.to(device), y.to(device)
     optimizer.zero_grad()
-    with torch.autocast(device_type=device, dtype=torch.bfloat16):
-        logits, loss = model(x, y)
-    loss.backward()
+    loss_accum = 0.0
+    for micro_step in range(grad_accum_steps):
+        x, y = train_loader.next_batch()
+        x, y = x.to(device), y.to(device)
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            logits, loss = model(x, y)
+        loss = loss / grad_accum_steps # normalize loss
+        loss_accum += loss.detach()
+        loss.backward()
+    
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
     # update learning rate
@@ -274,9 +287,9 @@ for step in range(max_steps):
     torch.cuda.synchronize()
     t1 = time.time()
     dt = t1 - t0 # difference in seconds
-    tokens_processed = train_loader.B * train_loader.T
+    tokens_processed = train_loader.B * train_loader.T * grad_accum_steps
     tokens_per_second = tokens_processed / dt
-    print(f"step {step} | loss: {loss.item()} | norm: {norm:.4f} | dt: {dt*1000:.2f}ms | tokens/s: {tokens_per_second:.2f}")
+    print(f"step {step} | loss: {loss_accum.item():.6f} | norm: {norm:.4f} | dt: {dt*1000:.2f}ms | tokens/s: {tokens_per_second:.2f}")
 
 import sys; sys.exit(0)
 
