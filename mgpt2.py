@@ -260,9 +260,9 @@ def get_most_likely_row(tokens, mask, logits):
 
 # -----------------------------------------------------------------------------
 # simple launch:
-# python train_gpt2.py
+# python mgpt2.py
 # DDP launch for e.g. 8 GPUs:
-# torchrun --standalone --nproc_per_node=8 train_gpt2.py
+# torchrun --standalone --nproc_per_node=4 mgpt2.py
 
 # run the training loop
 import time
