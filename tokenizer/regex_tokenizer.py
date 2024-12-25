@@ -41,7 +41,7 @@ class RegexTokenizer(BasicTokenizer):
         part_bytes = []
         for id in ids:
             if id in self.vocab:
-                part_bytes.append(self.vocab[id])
+                part_bytes.append(self.vocab[id]) # id can be > 256 after merging
             elif id in self.inverse_special_tokens:
                 part_bytes.append(self.inverse_special_tokens[id])
             else:
@@ -54,7 +54,7 @@ class RegexTokenizer(BasicTokenizer):
         tokens = list(chunk_bytes)
         while len(tokens) >= 2:
             if verbose:
-                visualise_tokens([self.vocab[token] for token in tokens])
+                visualise_tokens([self.vocab[token] for token in tokens]) # token can be > 256 after merging
             stats = {}
             get_stats(tokens, stats)
             pair = min(stats, key=lambda p: self.merges.get(p, float("inf")))

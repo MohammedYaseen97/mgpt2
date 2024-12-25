@@ -68,7 +68,7 @@ class GPT4Tokenizer(RegexTokenizer):
             if verbose:
                 decodable_ids = [] # each id can be multiple bytes i.e. any utf-8 character
                 for id in ids:
-                    char = self.vocab[id]
+                    char = self.vocab[id] # id can be > 256 after merging
                     decodable_ids.append(bytes(self.inverse_byte_shuffle[b] for b in char))
                 visualise_tokens(decodable_ids)
             stats = {}
@@ -84,7 +84,7 @@ class GPT4Tokenizer(RegexTokenizer):
         part_bytes = []
         for id in ids:
             if id in self.vocab:
-                char = self.vocab[id]
+                char = self.vocab[id] # id can be > 256 after merging
                 part_bytes.extend(self.inverse_byte_shuffle[b] for b in char)
             elif id in self.inverse_special_tokens:
                 part_bytes.extend(self.inverse_special_tokens[id].encode("utf-8"))
