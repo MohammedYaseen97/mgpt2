@@ -5,8 +5,8 @@ class BasicTokenizer(Tokenizer):
         super().__init__()
     
     def train(self, text, vocab_size, verbose=False):
-        ids = list(text.encode("utf-8"))
-        
+        # 'ids' is a list of integers, each representing a byte from the UTF-8 encoded string
+        ids = list(text.encode("utf-8")) # list[int]
         if verbose:
             print(f"len(text) = {len(text)}")
             print(f"len(tokens) = {len(ids)}")
@@ -18,7 +18,7 @@ class BasicTokenizer(Tokenizer):
         for i in range(num_merges):
             stats = {}
             get_stats(ids, stats)
-            pair = max(stats, key=stats.get)
+            pair = max(stats, key=stats.get) # (int, int)
             idx = 256 + i
             ids = merge(ids, pair, idx)
             merges[pair] = idx

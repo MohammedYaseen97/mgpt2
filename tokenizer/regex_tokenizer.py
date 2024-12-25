@@ -34,12 +34,12 @@ class RegexTokenizer(BasicTokenizer):
         self.vocab = vocab
         
     def decode(self, ids) -> str:
-        text = b"".join([self.vocab[id] for id in ids])
+        text = b"".join(self.vocab[id] for id in ids)
         text = text.decode(encoding="utf-8", errors="replace")
         return text
     
-    def _encode_chunk(self, chunk_bytes, verbose=False) -> list[int]:
-        tokens = chunk_bytes.copy()
+    def _encode_chunk(self, chunk_bytes: bytes, verbose=False) -> list[int]:
+        tokens = list(chunk_bytes)
         while len(tokens) >= 2:
             if verbose:
                 visualise_tokens([self.vocab[token] for token in tokens])
@@ -54,17 +54,12 @@ class RegexTokenizer(BasicTokenizer):
     
     def encode(self, text, verbose=False) -> list[int]:
         chunk_texts = re.findall(self.regex, text)
-        chunk_bytes = [list(chunk.encode("utf-8")) for chunk in chunk_texts]
-        if verbose:
-            tokens = []
-            for chunk in chunk_bytes:
-                tokens += [self.vocab[byte] for byte in chunk]
-            visualise_tokens(tokens)
         ids_list = []
-        for i, chunk_byte in enumerate(chunk_bytes):
+        for i, text in enumerate(chunk_texts):
             if verbose:
                 print()
-                print(f"encoding chunk {i+1}/{len(chunk_bytes)}: {chunk_texts[i]}")
-            ids = self._encode_chunk(chunk_byte, verbose)
+                print(f"encoding chunk {i+1}/{len(chunk_texts)}: {text}")
+            chunk_bytes = text.encode("utf-8") # raw bytes
+            ids = self._encode_chunk(chunk_bytes, verbose)
             ids_list.extend(ids)
         return ids_list
