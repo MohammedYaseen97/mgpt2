@@ -8,6 +8,10 @@ class RegexTokenizer(BasicTokenizer):
     def __init__(self, regex: str = GPT4_SPLIT_PATTERN):
         super().__init__()
         self.regex = re.compile(regex)
+    
+    def register_special_tokens(self, special_tokens: dict[str, int]):
+        self.special_tokens = special_tokens
+        self.inverse_special_tokens = {v: k for k, v in special_tokens.items()}
 
     def train(self, text: str, vocab_size: int = 50_257, verbose: bool = False):
         assert vocab_size >= 256, "Vocab size must be at least 256"
@@ -34,8 +38,16 @@ class RegexTokenizer(BasicTokenizer):
         self.vocab = vocab
         
     def decode(self, ids) -> str:
-        text = b"".join(self.vocab[id] for id in ids)
-        text = text.decode(encoding="utf-8", errors="replace")
+        part_bytes = []
+        for id in ids:
+            if id in self.vocab:
+                part_bytes.append(self.vocab[id])
+            elif id in self.inverse_special_tokens:
+                part_bytes.append(self.inverse_special_tokens[id])
+            else:
+                raise ValueError(f"id={id} not in vocab or special_tokens")
+        text_bytes = b"".join(part_bytes)
+        text = text_bytes.decode(encoding="utf-8", errors="replace")
         return text
     
     def _encode_chunk(self, chunk_bytes: bytes, verbose=False) -> list[int]:
@@ -52,7 +64,7 @@ class RegexTokenizer(BasicTokenizer):
             tokens = merge(tokens, pair, idx)
         return tokens
     
-    def encode(self, text, verbose=False) -> list[int]:
+    def encode_ordinary(self, text, verbose=False) -> list[int]:
         chunk_texts = re.findall(self.regex, text)
         ids_list = []
         for i, text in enumerate(chunk_texts):
@@ -63,3 +75,29 @@ class RegexTokenizer(BasicTokenizer):
             ids = self._encode_chunk(chunk_bytes, verbose)
             ids_list.extend(ids)
         return ids_list
+    
+    def encode(self, text, verbose=False, allowed_special="none") -> list[int]:
+        special = {}
+        if allowed_special == "all":
+            special = self.special_tokens
+        elif allowed_special == "none":
+            special = {}
+        elif allowed_special == "none_raise":
+            special = {}
+            assert all(token not in text for token in self.special_tokens), "Text contains special tokens that are not allowed"
+        elif isinstance(allowed_special, set):
+            special = {k: v for k, v in self.special_tokens.items() if k in allowed_special}
+        else:
+            raise ValueError(f"allowed_special={allowed_special} not understood.")
+        if not special:
+            return self.encode_ordinary(text, verbose)
+        special_pattern = "(" + "|".join(re.escape(token) for token in special) + ")"
+        parts = re.split(special_pattern, text)
+        ids = []
+        for part in parts:
+            if part in special:
+                ids.append(special[part])
+            else:
+                ids.extend(self.encode_ordinary(part, verbose))
+        return ids
+

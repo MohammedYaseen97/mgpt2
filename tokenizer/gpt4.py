@@ -56,6 +56,7 @@ class GPT4Tokenizer(RegexTokenizer):
         # and probably historical, but therefore we have to deal with it here
         self.byte_shuffle = {idx: mergeable_ranks[bytes([idx])] for idx in range(256)}
         self.inverse_byte_shuffle = {v: k for k, v in self.byte_shuffle.items()}
+        self.register_special_tokens(GPT4_SPECIAL_TOKENS)
     
     def train(self, text: str, vocab_size: int = 50_257, verbose: bool = False):
         raise NotImplementedError
@@ -80,8 +81,16 @@ class GPT4Tokenizer(RegexTokenizer):
         return ids
     
     def decode(self, ids) -> str:
-        text_bytes = b"".join(self.vocab[id] for id in ids)
-        text_bytes = bytes(self.inverse_byte_shuffle[b] for b in text_bytes)
+        part_bytes = []
+        for id in ids:
+            if id in self.vocab:
+                char = self.vocab[id]
+                part_bytes.extend(self.inverse_byte_shuffle[b] for b in char)
+            elif id in self.inverse_special_tokens:
+                part_bytes.extend(self.inverse_special_tokens[id].encode("utf-8"))
+            else:
+                raise ValueError(f"id={id} not in vocab or special_tokens")
+        text_bytes = bytes(part_bytes)
         text = text_bytes.decode(encoding="utf-8", errors="replace")
         return text
     
