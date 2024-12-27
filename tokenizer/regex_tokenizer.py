@@ -7,7 +7,8 @@ GPT4_SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1
 class RegexTokenizer(BasicTokenizer):
     def __init__(self, regex: str = GPT4_SPLIT_PATTERN):
         super().__init__()
-        self.regex = re.compile(regex)
+        self.pattern = regex
+        self.regex = re.compile(self.pattern)
     
     def register_special_tokens(self, special_tokens: dict[str, int]):
         self.special_tokens = special_tokens

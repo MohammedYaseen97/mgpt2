@@ -141,6 +141,11 @@ class Tokenizer:
             assert version == "minbpe v1"
             # read the pattern
             self.pattern = f.readline().strip()
+            # read the special tokens
+            num_special = int(f.readline().strip())
+            for _ in range(num_special):
+                special, special_idx = f.readline().strip().split()
+                special_tokens[special] = int(special_idx)
             # read the merges
             for line in f:
                 idx1, idx2 = map(int, line.split())
