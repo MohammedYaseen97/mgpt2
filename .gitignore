@@ -6,5 +6,6 @@
 */__pycache__
 */cache
 *.txt
+!requirements.txt
 /tokenizer/target
 *.lock
