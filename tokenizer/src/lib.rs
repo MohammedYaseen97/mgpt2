@@ -8,11 +8,11 @@ use dashmap::DashMap;
 /// Calculate frequency statistics for pairs of consecutive numbers in chunks
 #[pyfunction]
 fn get_stats_parallel(chunks: Vec<Vec<u32>>) -> PyResult<HashMap<(u32, u32), u32>> {
-    // Create a thread pool with 8 threads for parallel processing
-    let thread_pool = ThreadPoolBuilder::new()
+    // Initialize thread pool with 8 threads
+    ThreadPoolBuilder::new()
         .num_threads(8)
         .build_global()
-        .unwrap();
+        .expect("Failed to initialize thread pool");
 
     // Create a thread-safe HashMap to store the statistics
     let stats = Arc::new(Mutex::new(HashMap::new()));
@@ -61,13 +61,12 @@ fn merge_parallel(
     pair_to_merge: (u32, u32),
     new_number: u32,
 ) -> PyResult<Vec<Vec<u32>>> {
-    // Create a thread pool with 8 threads for parallel processing
-    let thread_pool = ThreadPoolBuilder::new()
+    // Initialize thread pool with 8 threads
+    ThreadPoolBuilder::new()
         .num_threads(8)
         .build_global()
-        .unwrap();
+        .expect("Failed to initialize thread pool");
 
-    // Process each chunk in parallel
     let merged_chunks: Vec<Vec<u32>> = chunks
         .par_iter()
         .map(|chunk_ids| {
@@ -111,7 +110,7 @@ fn merge_parallel(
 
 /// Register the Python module functions
 #[pymodule]
-fn tokenizer(py: Python, m: &PyModule) -> PyResult<()> {
+fn tokenizer(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_stats_parallel, m)?)?;
     m.add_function(wrap_pyfunction!(merge_parallel, m)?)?;
     Ok(())
