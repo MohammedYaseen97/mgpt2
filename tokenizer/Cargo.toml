@@ -1,0 +1,11 @@
+[package]
+name = "tokenizer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pyo3 = { version = "0.18", features = ["extension-module"] }
+rayon = "1.7"
+
+[lib]
+crate-type = ["cdylib"]
