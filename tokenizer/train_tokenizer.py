@@ -2,7 +2,7 @@ from regex_tokenizer import RegexTokenizer
 import regex as re
 
 # read from corpus.txt
-with open("tok_corpus.txt", "r", encoding="utf-8") as file:
+with open("/home/yaseen/mgpt2/tokenizer/tok_corpus.txt", "r", encoding="utf-8") as file:
     corpus = file.read()
 
 regex = re.compile(

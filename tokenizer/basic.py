@@ -1,4 +1,4 @@
-from .base import Tokenizer, get_stats, merge, visualise_tokens
+from base import Tokenizer, get_stats, merge, visualise_tokens
 
 class BasicTokenizer(Tokenizer):
     def __init__(self):

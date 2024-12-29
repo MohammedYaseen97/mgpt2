@@ -1,5 +1,5 @@
-from tokenizer.base import get_stats, merge, visualise_tokens
-from tokenizer.basic import BasicTokenizer
+from base import get_stats, merge, visualise_tokens
+from basic import BasicTokenizer
 import regex as re
 
 GPT4_SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""

@@ -1,5 +1,5 @@
-from .regex_tokenizer import RegexTokenizer
-from .base import visualise_tokens, get_stats, merge
+from regex_tokenizer import RegexTokenizer
+from base import visualise_tokens, get_stats, merge
 from typing import Optional
 import regex as re
 import tiktoken
