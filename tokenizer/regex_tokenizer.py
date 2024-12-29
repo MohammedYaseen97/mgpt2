@@ -1,6 +1,8 @@
 from base import get_stats, merge, visualise_tokens
 from basic import BasicTokenizer
 import regex as re
+from tqdm import tqdm
+import time
 
 GPT4_SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
 
@@ -23,7 +25,15 @@ class RegexTokenizer(BasicTokenizer):
         
         merges = {}
         vocab = {idx: bytes([idx]) for idx in range(256)}
-        for i in range(num_merges):
+        
+        # Output will look like:
+        # Training tokenizer: 100%|██████████| 50000/50000 [12:34<00:00, 66.23it/s]
+        # merge 1/50000: (97, 101) -> 256 (b'ae') had 2945 occurrences (took 0.15s)
+        # merge 2/50000: (104, 108) -> 257 (b'hl') had 2842 occurrences (took 0.14s)
+        # ...
+        
+        for i in tqdm(range(num_merges), desc="Training tokenizer"):
+            start_time = time.time()
             stats = {}
             for chunk_ids in ids:
                 get_stats(chunk_ids, stats)
@@ -32,8 +42,9 @@ class RegexTokenizer(BasicTokenizer):
             ids = [merge(chunk_ids, pair, idx) for chunk_ids in ids]
             merges[pair] = idx
             vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
-            if verbose and i % 100 == 0:
-                print(f"merge {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]}) had {stats[pair]} occurrences")
+            if verbose and i % 10 == 0:
+                time_taken = time.time() - start_time
+                tqdm.write(f"merge {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]}) had {stats[pair]} occurrences (took {time_taken:.2f}s)")
         
         self.merges = merges
         self.vocab = vocab
