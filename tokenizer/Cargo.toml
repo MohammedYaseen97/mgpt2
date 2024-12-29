@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 pyo3 = { version = "0.18", features = ["extension-module"] }
 rayon = "1.7"
+dashmap = "5.0"
 
 [lib]
 crate-type = ["cdylib"]
