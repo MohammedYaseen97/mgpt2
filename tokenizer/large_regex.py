@@ -1,5 +1,5 @@
 from regex_tokenizer import RegexTokenizer
-from tokenizer import get_stats_parallel, merge_parallel
+from rust_tokenizer import get_stats_parallel, merge_parallel
 import regex as re
 from tqdm import tqdm
 import time
