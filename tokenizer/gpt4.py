@@ -1,10 +1,14 @@
-from regex_tokenizer import RegexTokenizer
-from base import visualise_tokens, get_stats, merge
+try:
+    from .regex_tokenizer import RegexTokenizer
+    from .base import visualise_tokens, get_stats, merge
+    from .patterns import GPT4_SPLIT_PATTERN
+except ImportError:  # allow running as a script from inside `tokenizer/`
+    from regex_tokenizer import RegexTokenizer
+    from base import visualise_tokens, get_stats, merge
+    from patterns import GPT4_SPLIT_PATTERN
 from typing import Optional
 import regex as re
 import tiktoken
-
-GPT4_SPLIT_PATTERN = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
 GPT4_SPECIAL_TOKENS = {
     '<|endoftext|>': 100257,
     '<|fim_prefix|>': 100258,

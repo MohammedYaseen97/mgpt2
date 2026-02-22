@@ -3,9 +3,12 @@
 /edu_fineweb10B
 /hellaswag
 /logs
-*/__pycache__
+*__pycache__
 */cache
 *.txt
 !requirements.txt
 /tokenizer/target
 *.lock
+*.model
+*.vocab
+/tokenizer/artifacts

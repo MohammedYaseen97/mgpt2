@@ -68,6 +68,7 @@ class Tokenizer:
         self.merges = {} # (int, int) -> int
         self.pattern = "" # str
         self.special_tokens = {} # str -> int e.g {'<|endoftext|>': 100257}
+        self.inverse_special_tokens = {} # int -> str
         self.vocab = self._build_vocab() # int -> bytes
     
     def _build_vocab(self):
@@ -153,4 +154,5 @@ class Tokenizer:
                 idx += 1
         self.merges = merges
         self.special_tokens = special_tokens
+        self.inverse_special_tokens = {v: k for k, v in special_tokens.items()}
         self.vocab = self._build_vocab()

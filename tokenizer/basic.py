@@ -1,4 +1,7 @@
-from base import Tokenizer, get_stats, merge, visualise_tokens
+try:
+    from .base import Tokenizer, get_stats, merge, visualise_tokens
+except ImportError:  # allow running as a script from inside `tokenizer/`
+    from base import Tokenizer, get_stats, merge, visualise_tokens
 
 class BasicTokenizer(Tokenizer):
     def __init__(self):
