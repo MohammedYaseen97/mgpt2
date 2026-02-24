@@ -103,6 +103,7 @@ def main() -> None:
     ap.add_argument("--model", required=True, help="Path to trained .model file (e.g. tokenizer/artifacts/mgpt2.model)")
     ap.add_argument("--private", action="store_true", help="Create/upload as a private repository.")
     ap.add_argument("--eval_text", default=None, help="Optional: path to held-out eval text file.")
+    ap.add_argument("--eval_json", default=None, help="Optional: precomputed evaluation JSON to upload as evaluation.json.")
     ap.add_argument("--eval_limit", type=int, default=10000, help="How many lines to evaluate (if --eval_text).")
     ap.add_argument("--commit_message", default="Upload mgpt2 tokenizer", help="Hub commit message.")
     ap.add_argument("--dry_run", action="store_true", help="Build staging folder locally but do not upload.")
@@ -136,7 +137,14 @@ def main() -> None:
         _patch_tokenizer_config(repo_dir)
 
         # 3) Optionally evaluate and attach results
-        if args.eval_text:
+        if args.eval_json and args.eval_text:
+            raise SystemExit("Use only one of --eval_text or --eval_json.")
+        if args.eval_json:
+            src = Path(args.eval_json)
+            if not src.exists():
+                raise SystemExit(f"--eval_json not found: {src}")
+            shutil.copy2(src, repo_dir / "evaluation.json")
+        elif args.eval_text:
             _run_evaluation(repo_dir, args.eval_text, args.eval_limit, str(model_path))
 
         # 4) Write README

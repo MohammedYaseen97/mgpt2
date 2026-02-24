@@ -1,0 +1,28 @@
+# Pretraining config (mgpt2 tokenizer)
+
+name: mgpt2_custom_tokenizer
+
+tokenizer:
+  kind: mgpt2_regex_bpe
+  model_file: tokenizer/artifacts/mgpt2.model  # TODO: train this
+  vocab_size: 50257
+  vocab_padded: 50304
+
+data:
+  shards_dir: data/shards_mgpt2  # TODO: generate
+
+train:
+  seed: 1337
+  block_size: 1024
+  total_batch_size: 524288
+  micro_batch_size: 16
+  max_steps: 19073
+  warmup_steps: 715
+  max_lr: 0.003
+  min_lr_ratio: 0.1
+  weight_decay: 0.1
+
+eval:
+  heldout_text: data/eval/heldout_lm.txt   # TODO
+  bucketed: true
+

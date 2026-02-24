@@ -1,0 +1,26 @@
+# SFT config (TODO)
+
+name: sft_indicalign_instruct
+
+data:
+  dataset: "TODO: indic-align instruct dataset identifier"
+  split_train: "train"
+  split_val: "validation"
+  max_examples: null
+  seed: 1337
+
+tokenizer:
+  kind: mgpt2_regex_bpe
+  model_file: tokenizer/artifacts/mgpt2.model
+  vocab_padded: 50304
+
+train:
+  # TODO: choose SFT hyperparams, log them, keep reproducible.
+  lr: 1.0e-5
+  batch_size: 8
+  grad_accum: 1
+  max_steps: 1000
+
+eval:
+  prompt_suite: data/eval/sft_prompts.jsonl  # TODO: create
+

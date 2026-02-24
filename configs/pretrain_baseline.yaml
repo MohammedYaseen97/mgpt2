@@ -1,0 +1,30 @@
+# Pretraining config (baseline)
+#
+# ALREADY DONE engine: `train.py`
+# Your TODO later is to create a thin wrapper that reads this config and runs the same settings.
+
+name: baseline_gpt2_tokenizer
+
+tokenizer:
+  kind: gpt2_tiktoken   # baseline
+  vocab_padded: 50304
+
+data:
+  shards_dir: data/shards_gpt2   # TODO: you will generate this
+  shard_prefix: null            # TODO: set if needed
+
+train:
+  seed: 1337
+  block_size: 1024
+  total_batch_size: 524288
+  micro_batch_size: 16
+  max_steps: 19073
+  warmup_steps: 715
+  max_lr: 0.003
+  min_lr_ratio: 0.1
+  weight_decay: 0.1
+
+eval:
+  heldout_text: data/eval/heldout_lm.txt   # TODO
+  bucketed: true
+

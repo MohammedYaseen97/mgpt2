@@ -1,0 +1,25 @@
+# DPO config (TODO)
+
+name: dpo_toxic_alignment
+
+data:
+  dataset: "TODO: toxic preference dataset identifier"
+  split_train: "train"
+  split_val: "validation"
+  seed: 1337
+
+tokenizer:
+  kind: mgpt2_regex_bpe
+  model_file: tokenizer/artifacts/mgpt2.model
+  vocab_padded: 50304
+
+train:
+  # TODO: pick DPO hyperparams and document them.
+  beta: 0.1
+  lr: 1.0e-6
+  batch_size: 4
+  max_steps: 500
+
+eval:
+  heldout_pairs: data/eval/dpo_pairs.jsonl  # TODO: create
+

@@ -54,6 +54,11 @@ def main() -> None:
         help="RNG seed used with --sample_lines (and shuffling).",
     )
     ap.add_argument(
+        "--exclude_lines_file",
+        default=None,
+        help="Optional: path to a text file (one line per example) whose lines must be excluded from training.",
+    )
+    ap.add_argument(
         "--max_chars",
         type=int,
         default=None,
@@ -105,6 +110,14 @@ def main() -> None:
     parts: list[str] = []
     total_chars = 0
 
+    exclude: set[str] = set()
+    if args.exclude_lines_file:
+        with open(args.exclude_lines_file, "r", encoding="utf-8") as f:
+            for raw in f:
+                s = raw.rstrip("\n")
+                if s:
+                    exclude.add(s)
+
     if args.sample_lines is not None and args.sample_lines > 0:
         rng = random.Random(args.seed)
         reservoir: list[str] = []
@@ -113,6 +126,8 @@ def main() -> None:
             for raw in f:
                 s = raw.rstrip("\n")
                 if not s:
+                    continue
+                if s in exclude:
                     continue
                 seen += 1
                 if len(reservoir) < args.sample_lines:
@@ -125,12 +140,19 @@ def main() -> None:
         parts = reservoir
     else:
         with open(args.corpus, "r", encoding="utf-8") as f:
+            kept = 0
             for i, line in enumerate(f):
-                if args.max_lines is not None and i >= args.max_lines:
+                if args.max_lines is not None and kept >= args.max_lines:
                     break
                 if not line:
                     continue
-                parts.append(line.rstrip("\n"))
+                s = line.rstrip("\n")
+                if not s:
+                    continue
+                if s in exclude:
+                    continue
+                parts.append(s)
+                kept += 1
                 total_chars += len(parts[-1]) + 1
                 if args.max_chars is not None and total_chars >= args.max_chars:
                     break
