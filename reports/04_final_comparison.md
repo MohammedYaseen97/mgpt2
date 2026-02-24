@@ -14,6 +14,10 @@ This project demonstrates:
 - DPO: preference win-rate + regression checks: [TODO link]
 - HF repo links: [TODO]
 
+### Note on comparisons
+- **Controlled (“equal terms”)** results in this repo come from running baseline vs mgpt2 with the same architecture, same data mixture, and same token-budget.
+- Comparisons to external multilingual models are **contextual only** (training conditions differ); label them as such.
+
 ### Narrative (keep it tight)
 - [TODO] 10–20 sentences
 

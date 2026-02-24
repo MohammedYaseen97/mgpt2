@@ -30,6 +30,10 @@ When comparing baseline vs mgpt2:
 - same token-level compute budget (tokens processed), not “epochs”
 - same held-out eval sets (exact text lines)
 
+**Note on “equal terms” comparisons**
+- **Controlled (equal terms)**: comparisons you run *inside this repo* where you hold architecture, data mixture, and token-budget constant and change only the tokenizer (baseline GPT‑2 tokens vs mgpt2 tokens).
+- **Contextual (not equal terms)**: comparisons to external multilingual models (different vocab sizes, corpora, compute, objectives). You may report these for context, but you must label them explicitly as non-controlled.
+
 ### Metrics (required)
 You must provide:
 - **tokenizer-only**: tokens/1k bytes + p95 tokens/line (bucketed)
@@ -43,7 +47,7 @@ You must provide:
 
 ### Goal
 Train a tokenizer with:
-- **final ID space** = 50257 (including 5 special tokens)
+- **GPT-2-exact tokenizer terms**: 256 bytes + 50,000 merges + 1 `<|endoftext|>` = 50,257 IDs
 - model padded vocab = 50304 (apples-to-apples with baseline GPT‑2)
 
 ### Deliverables
@@ -68,7 +72,7 @@ Leak-free protocol (recommended):
 ./virtual/bin/python -m tokenizer.train_tokenizer \
   --corpus tokenizer/tok_corpus_large.txt \
   --exclude_lines_file tokenizer/artifacts/heldout_eval.txt \
-  --vocab_size 50257 \
+  --num_merges 50000 \
   --out_prefix tokenizer/artifacts/mgpt2
 ```
 

@@ -17,7 +17,7 @@ This folder contains the **pure-Python** tokenizer implementations and the utili
 Train an Indic-focused tokenizer over `tokenizer/tok_corpus.txt` and save artifacts into `tokenizer/artifacts/`:
 
 ```bash
-./virtual/bin/python -m tokenizer.train_tokenizer --vocab_size 50257
+./virtual/bin/python -m tokenizer.train_tokenizer --num_merges 50000
 ```
 
 ### Publish to Hugging Face (tokenizer-only)

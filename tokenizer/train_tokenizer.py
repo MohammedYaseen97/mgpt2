@@ -11,15 +11,15 @@ import random
 _HERE = os.path.dirname(__file__)
 
 
-def _assign_special_token_ids(vocab_size: int, specials: list[str]) -> dict[str, int]:
-    base_vocab_size = vocab_size - len(specials)
-    if base_vocab_size < 256:
-        raise ValueError(
-            f"vocab_size={vocab_size} too small for {len(specials)} special tokens "
-            f"(need vocab_size - num_special >= 256)."
-        )
-    # Special tokens occupy the last IDs, GPT-2 style.
-    return {tok: base_vocab_size + i for i, tok in enumerate(specials)}
+def _assign_special_token_ids(merge_vocab_size: int, specials: list[str]) -> dict[str, int]:
+    """
+    Assign special tokens after the mergeable vocab.
+
+    merge_vocab_size is the size of the mergeable vocab (bytes + merges), i.e. 256 + num_merges.
+    """
+    if merge_vocab_size < 256:
+        raise ValueError(f"merge_vocab_size must be >= 256, got {merge_vocab_size}")
+    return {tok: merge_vocab_size + i for i, tok in enumerate(specials)}
 
 
 def main() -> None:
@@ -30,10 +30,16 @@ def main() -> None:
         help="Path to UTF-8 corpus file (one example per line). Default: tokenizer/tok_corpus.txt",
     )
     ap.add_argument(
+        "--num_merges",
+        type=int,
+        default=50000,
+        help="Number of BPE merges to learn (excludes bytes + special tokens). GPT-2 uses 50000.",
+    )
+    ap.add_argument(
         "--vocab_size",
         type=int,
-        default=50257,
-        help="Final vocab size INCLUDING special tokens (e.g. 50257 like GPT-2).",
+        default=None,
+        help="DEPRECATED: use --num_merges. If set, num_merges = (vocab_size - num_special) - 256.",
     )
     ap.add_argument(
         "--max_lines",
@@ -79,13 +85,7 @@ def main() -> None:
     ap.add_argument(
         "--special",
         action="append",
-        default=[
-            "<|endoftext|>",
-            "<|fim_prefix|>",
-            "<|fim_middle|>",
-            "<|fim_suffix|>",
-            "<|endofprompt|>",
-        ],
+        default=["<|endoftext|>"],
         help="Special token to reserve at the end of the vocab. Can be passed multiple times.",
     )
     ap.add_argument(
@@ -104,8 +104,18 @@ def main() -> None:
         seen.add(s)
         specials.append(s)
 
-    train_vocab_size = args.vocab_size - len(specials)
-    special_tokens = _assign_special_token_ids(args.vocab_size, specials)
+    if args.vocab_size is not None:
+        # Backward compatible mode
+        merge_vocab_size = (args.vocab_size - len(specials))
+        num_merges = merge_vocab_size - 256
+        if num_merges < 0:
+            raise SystemExit("vocab_size is too small once special tokens are reserved.")
+    else:
+        num_merges = args.num_merges
+        merge_vocab_size = 256 + num_merges
+
+    final_vocab_size = merge_vocab_size + len(specials)
+    special_tokens = _assign_special_token_ids(merge_vocab_size, specials)
 
     parts: list[str] = []
     total_chars = 0
@@ -164,7 +174,7 @@ def main() -> None:
     tokenizer = RegexTokenizer(regex=INDIC_SPLIT_PATTERN)
     tokenizer.train(
         corpus,
-        train_vocab_size,
+        merge_vocab_size,
         verbose=args.verbose,
         min_chunk_freq=args.min_chunk_freq,
         max_chunks=args.max_chunks,
@@ -179,7 +189,7 @@ def main() -> None:
     # Convenience print for wiring into GPTConfig.vocab_size
     print(
         f"Saved: {args.out_prefix}.model / {args.out_prefix}.vocab | "
-        f"train_vocab_size={train_vocab_size} | "
+        f"num_merges={num_merges} | merge_vocab_size={merge_vocab_size} | final_vocab_size={final_vocab_size} | "
         f"num_special={len(specials)} | "
         f"max_id={max(list(tokenizer.vocab.keys()) + list(tokenizer.inverse_special_tokens.keys()))}"
     )
