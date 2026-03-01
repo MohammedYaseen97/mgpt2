@@ -81,20 +81,31 @@ Pass criteria (you must justify):
 
 ---
 
-## Phase B — Data mixture + sharding (baseline + mgpt2)
+## Phase B — Data preparation (all phases)
 
 ### Goal
-Create a single underlying multilingual+translit corpus mixture, then tokenize it into:
-- baseline GPT‑2 tokens (tiktoken gpt2)
-- mgpt2 tokens (your tokenizer)
+Build all raw corpora and tokenized shards needed across pretraining, SFT, and DPO.
+All data work lives here; downstream training phases consume these outputs and add nothing to `scripts/data/`.
 
-### Your tasks (TODO)
+### Pretraining corpus
 - [TODO] implement `scripts/data/build_corpus_mixture.py`
   - outputs a line-based corpus file (and/or doc-id mapping) with deterministic sampling
 - [TODO] implement `scripts/data/tokenize_shards.py`
   - write `data/shards_gpt2/*.npy` and `data/shards_mgpt2/*.npy` (int32)
 - [TODO] implement `scripts/data/make_lm_eval_sets.py`
   - heldout text sets and bucket splits
+
+### SFT corpus
+- [TODO] implement `scripts/data/build_sft_data.py`
+  - downloads IndicAlign instruct split; produces train/val splits with prompt boundaries preserved
+- [TODO] implement `scripts/data/tokenize_sft_shards.py`
+  - tokenizes into shards; prompt/response boundary must be encoded per example (required for selective loss masking during training)
+
+### DPO corpus
+- [TODO] implement `scripts/data/build_dpo_data.py`
+  - downloads IndicAlign toxic split; produces aligned chosen/rejected pair splits with train/val held-out
+- [TODO] implement `scripts/data/tokenize_dpo_shards.py`
+  - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards
 
 ### Checks
 - [TODO] implement `scripts/checks/check_shards.py`
@@ -126,12 +137,6 @@ Train two models fairly:
 
 ## Phase D — SFT (IndicAlign Instruct)
 
-### Data preparation (prerequisite)
-- [TODO] implement `scripts/data/build_sft_data.py`
-  - downloads IndicAlign instruct split; produces train/val splits with prompt boundaries preserved
-- [TODO] implement `scripts/data/tokenize_sft_shards.py`
-  - tokenizes into shards; prompt/response boundary must be encoded per example (required for selective loss masking during training)
-
 ### Your tasks (TODO)
 - [TODO] implement `scripts/run_sft.py`
 - [TODO] implement `eval/sft_eval.py` (heldout loss + fixed prompt suite)
@@ -140,12 +145,6 @@ Train two models fairly:
 ---
 
 ## Phase E — DPO (alignment)
-
-### Data preparation (prerequisite)
-- [TODO] implement `scripts/data/build_dpo_data.py`
-  - downloads IndicAlign toxic split; produces aligned chosen/rejected pair splits with train/val held-out
-- [TODO] implement `scripts/data/tokenize_dpo_shards.py`
-  - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards
 
 ### Your tasks (TODO)
 - [TODO] implement `scripts/run_dpo.py`
