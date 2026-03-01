@@ -126,14 +126,26 @@ Train two models fairly:
 
 ## Phase D — SFT (IndicAlign Instruct)
 
+### Data preparation (prerequisite)
+- [TODO] implement `scripts/data/build_sft_data.py`
+  - downloads IndicAlign instruct split; produces train/val splits with prompt boundaries preserved
+- [TODO] implement `scripts/data/tokenize_sft_shards.py`
+  - tokenizes into shards; prompt/response boundary must be encoded per example (required for selective loss masking during training)
+
 ### Your tasks (TODO)
 - [TODO] implement `scripts/run_sft.py`
-- [TODO] implement `eval/sft_eval.py` (heldout loss + prompt suite)
+- [TODO] implement `eval/sft_eval.py` (heldout loss + fixed prompt suite)
 - [TODO] write `reports/sft_report.md`
 
 ---
 
 ## Phase E — DPO (alignment)
+
+### Data preparation (prerequisite)
+- [TODO] implement `scripts/data/build_dpo_data.py`
+  - downloads IndicAlign toxic split; produces aligned chosen/rejected pair splits with train/val held-out
+- [TODO] implement `scripts/data/tokenize_dpo_shards.py`
+  - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards
 
 ### Your tasks (TODO)
 - [TODO] implement `scripts/run_dpo.py`
