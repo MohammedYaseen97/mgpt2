@@ -6,7 +6,6 @@ from typing import Iterable
 import tiktoken
 
 from tokenizer.regex_tokenizer import RegexTokenizer
-from tokenizer.gpt4 import GPT4Tokenizer
 
 
 @dataclass
@@ -125,19 +124,19 @@ def main() -> None:
 
     out: dict = {"text": args.text, "limit": args.limit, "overall": [], "by_bucket": {}}
 
-    # Baseline: tiktoken GPT-4 tokenizer
-    enc_gpt4 = tiktoken.get_encoding("cl100k_base")
+    # Baseline 1: tiktoken GPT-2 (monolingual reference — shows how far English-only BPE falls on Indic)
+    enc_gpt2 = tiktoken.get_encoding("gpt2")
     out["overall"].append(
-        eval_bucket("tiktoken_cl100k_base", lambda s: enc_gpt4.encode(s, allowed_special="all"), lines).as_dict()
+        eval_bucket("tiktoken_gpt2", lambda s: enc_gpt2.encode(s, allowed_special={"<|endoftext|>"}), lines).as_dict()
     )
 
-    # Reference implementation (should match the above)
-    ref = GPT4Tokenizer()
+    # Baseline 2: tiktoken cl100k (multilingual reference — the fair apples-to-apples comparison)
+    enc_cl100k = tiktoken.get_encoding("cl100k_base")
     out["overall"].append(
-        eval_bucket("mgpt2_GPT4Tokenizer_reference", lambda s: ref.encode(s, allowed_special="all"), lines).as_dict()
+        eval_bucket("tiktoken_cl100k_base", lambda s: enc_cl100k.encode(s, allowed_special="all"), lines).as_dict()
     )
 
-    # Candidate tokenizer
+    # Candidate: mgpt2 RegexTokenizer
     cand = RegexTokenizer()
     if args.model:
         cand.load(args.model)
@@ -150,8 +149,8 @@ def main() -> None:
 
     for bname, ls in sorted(buckets.items(), key=lambda kv: kv[0]):
         out["by_bucket"][bname] = [
-            eval_bucket("tiktoken_cl100k_base", lambda s: enc_gpt4.encode(s, allowed_special="all"), ls).as_dict(),
-            eval_bucket("mgpt2_GPT4Tokenizer_reference", lambda s: ref.encode(s, allowed_special="all"), ls).as_dict(),
+            eval_bucket("tiktoken_gpt2", lambda s: enc_gpt2.encode(s, allowed_special={"<|endoftext|>"}), ls).as_dict(),
+            eval_bucket("tiktoken_cl100k_base", lambda s: enc_cl100k.encode(s, allowed_special="all"), ls).as_dict(),
             eval_bucket(cand_name, lambda s: cand.encode(s, allowed_special="all"), ls).as_dict(),
         ]
 

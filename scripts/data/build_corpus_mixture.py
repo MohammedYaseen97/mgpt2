@@ -23,6 +23,8 @@ from pathlib import Path
 import sys
 from typing import Any, Iterable
 
+import pyarrow
+
 from datasets import interleave_datasets, load_dataset
 from tqdm import tqdm
 
@@ -40,7 +42,12 @@ DEFAULT_OUTPUT_FILE = REPO_ROOT / "data" / "raw" / "corpus_mixture.txt"
 
 DEFAULT_LIMIT = 1_500_000       # ~1B tokens at ~650 tokens/doc average
 DEFAULT_SEED = 42
-DEFAULT_BUFFER_SIZE = 100_000   # Larger buffer = better shuffle quality
+DEFAULT_BUFFER_SIZE = 10_000    # Keep low — PyArrow holds full doc dicts in RAM per buffered example
+
+# Release PyArrow memory pool + run GC every N documents written.
+# PyArrow accumulates decoded parquet row-group memory and doesn't return it to
+# the OS promptly; periodic flushing prevents unbounded RAM growth on long runs.
+_GC_INTERVAL = 10_000
 
 # Sampling weights — must sum to 1.0.
 # Native-script sources weighted slightly above transliterated counterparts
@@ -230,14 +237,19 @@ def build_corpus_mixture(
                 f.write(text + "\n")
                 written += 1
                 pbar.update(1)
+
+                if written % _GC_INTERVAL == 0:
+                    gc.collect()
+                    pyarrow.default_memory_pool().release_unused()
     finally:
         _safe_close(iterator)
         gc.collect()
+        pyarrow.default_memory_pool().release_unused()
 
     temp_file.replace(output_file)
     LOGGER.info("Wrote %d documents to %s", written, output_file)
 
-    _write_manifest(output_file, seed, buffer_size, limit, weights, written)
+    # _write_manifest(output_file, seed, buffer_size, limit, weights, written)
     return written
 
 
