@@ -1,4 +1,4 @@
-"""Build a shuffled text corpus by mixing streamed Hugging Face datasets.
+"""Build a mixed text corpus by interleaving streamed Hugging Face datasets.
 
 Corpus sources:
   - FineWeb (English web text)
@@ -10,6 +10,18 @@ Corpus sources:
 Outputs:
   - <output-file>     line-based corpus (one document per line)
   - manifest.json     dataset identifiers + sampling parameters for reproducibility
+
+Memory note:
+  This script does NOT apply a shuffle buffer during streaming.  Calling
+  .shuffle(buffer_size=N) on an interleaved HF IterableDataset pins N live
+  PyArrow buffer references, each pointing into a decoded parquet row-group
+  (~300–500 MB each). With 5 simultaneous streams that overhead accumulates to
+  several GB and grows unboundedly over a multi-hour run.
+
+  The interleave_datasets probability weights already produce the correct source
+  mixture without a shuffle buffer.  Global document-level shuffling is deferred
+  to the tokenize_shards.py step, where shards can be filled in randomised order
+  from the corpus file.
 """
 
 from __future__ import annotations
@@ -42,12 +54,11 @@ DEFAULT_OUTPUT_FILE = REPO_ROOT / "data" / "raw" / "corpus_mixture.txt"
 
 DEFAULT_LIMIT = 1_500_000       # ~1B tokens at ~650 tokens/doc average
 DEFAULT_SEED = 42
-DEFAULT_BUFFER_SIZE = 10_000    # Keep low — PyArrow holds full doc dicts in RAM per buffered example
 
 # Release PyArrow memory pool + run GC every N documents written.
 # PyArrow accumulates decoded parquet row-group memory and doesn't return it to
 # the OS promptly; periodic flushing prevents unbounded RAM growth on long runs.
-_GC_INTERVAL = 10_000
+_GC_INTERVAL = 1_000
 
 # Sampling weights — must sum to 1.0.
 # Native-script sources weighted slightly above transliterated counterparts
@@ -84,8 +95,6 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--seed",        type=int,   default=DEFAULT_SEED)
-    parser.add_argument("--buffer-size", type=int,   default=DEFAULT_BUFFER_SIZE,
-                        help="Shuffle buffer size (higher = better quality, more RAM).")
     parser.add_argument("--limit",       type=int,   default=DEFAULT_LIMIT,
                         help="Number of non-empty documents to write.")
     parser.add_argument("--output-file", type=Path,  default=DEFAULT_OUTPUT_FILE)
@@ -105,14 +114,11 @@ def parse_args() -> argparse.Namespace:
 
 def validate_inputs(
     limit: int,
-    buffer_size: int,
     weights: dict[str, float],
 ) -> None:
     """Validate runtime inputs early with clear error messages."""
     if limit <= 0:
         raise ValueError("--limit must be > 0.")
-    if buffer_size <= 0:
-        raise ValueError("--buffer-size must be > 0.")
 
     for name, w in weights.items():
         if w <= 0:
@@ -155,15 +161,17 @@ def _load_stream(key: str) -> Any:
 
 def _iter_mixed_stream(
     seed: int,
-    buffer_size: int,
     weights: dict[str, float],
 ) -> Iterable[dict[str, Any]]:
-    """Create a deterministically shuffled interleaved stream from all sources."""
-    streams      = [_load_stream(k) for k in weights]
-    probabilities = list(weights.values())
+    """Create an interleaved stream from all sources using probability weights.
 
-    mixed = interleave_datasets(streams, probabilities=probabilities, seed=seed)
-    return mixed.shuffle(seed=seed, buffer_size=buffer_size)
+    No shuffle buffer is applied here — see module docstring for rationale.
+    The interleave_datasets probability weights enforce the correct mixture;
+    document-level shuffling is deferred to the tokenize_shards.py step.
+    """
+    streams       = [_load_stream(k) for k in weights]
+    probabilities = list(weights.values())
+    return interleave_datasets(streams, probabilities=probabilities, seed=seed)
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +181,6 @@ def _iter_mixed_stream(
 def _write_manifest(
     output_file: Path,
     seed: int,
-    buffer_size: int,
     limit: int,
     weights: dict[str, float],
     lines_written: int,
@@ -182,7 +189,6 @@ def _write_manifest(
         "corpus_file": str(output_file),
         "lines_written": lines_written,
         "seed": seed,
-        "buffer_size": buffer_size,
         "limit": limit,
         "datasets": DATASETS,
         "weights": weights,
@@ -199,7 +205,6 @@ def _write_manifest(
 def build_corpus_mixture(
     *,
     seed: int,
-    buffer_size: int,
     limit: int,
     output_file: Path,
     weights: dict[str, float],
@@ -209,18 +214,17 @@ def build_corpus_mixture(
     Returns:
         Number of document lines written.
     """
-    validate_inputs(limit, buffer_size, weights)
+    validate_inputs(limit, weights)
 
     output_file = output_file.resolve()
     output_file.parent.mkdir(parents=True, exist_ok=True)
     temp_file = output_file.with_suffix(output_file.suffix + ".tmp")
 
     LOGGER.info("Source weights: %s", weights)
-    LOGGER.info("Preparing streamed dataset mixture (limit=%d, buffer=%d, seed=%d)...",
-                limit, buffer_size, seed)
+    LOGGER.info("Preparing streamed dataset mixture (limit=%d, seed=%d)...", limit, seed)
 
-    shuffled_stream = _iter_mixed_stream(seed=seed, buffer_size=buffer_size, weights=weights)
-    iterator = iter(shuffled_stream)
+    mixed_stream = _iter_mixed_stream(seed=seed, weights=weights)
+    iterator = iter(mixed_stream)
 
     written = 0
     try:
@@ -249,7 +253,7 @@ def build_corpus_mixture(
     temp_file.replace(output_file)
     LOGGER.info("Wrote %d documents to %s", written, output_file)
 
-    # _write_manifest(output_file, seed, buffer_size, limit, weights, written)
+    # _write_manifest(output_file, seed, limit, weights, written)
     return written
 
 
@@ -271,7 +275,6 @@ def main() -> None:
 
     build_corpus_mixture(
         seed=args.seed,
-        buffer_size=args.buffer_size,
         limit=args.limit,
         output_file=args.output_file,
         weights=weights,

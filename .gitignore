@@ -13,3 +13,4 @@
 *.vocab
 /tokenizer/artifacts
 PROJECT_SCAFFOLD_TEMPLATE.md
+/data
