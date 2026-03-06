@@ -7,14 +7,18 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
 
 ### Pretraining corpus
 
-- `build_corpus_mixture.py`
-  - reads FineWeb + Sangraha subsets (including translit); writes line-based corpus under `data/raw/` with deterministic sampling
-
-- `tokenize_shards.py`
-  - reads `data/raw/*.txt` and a tokenizer choice (baseline gpt2 or mgpt2); writes `data/shards_gpt2/*.npy` and `data/shards_mgpt2/*.npy` (int32)
+- `build_corpus_mixture.py` ✓
+  - streams FineWeb + Sangraha subsets (including translit variants); writes a **globally shuffled** line-based corpus to `data/raw/corpus_mixture.txt`
+  - the global shuffle (awk | GNU-sort | cut, seeded) runs as the final step of this script — not inside `tokenize_shards.py` — so that `make_lm_eval_sets.py` and `tokenize_shards.py` are independent consumers of the same file with no ordering dependency between them
 
 - `make_lm_eval_sets.py`
-  - writes held-out text files and script/bucket splits under `data/eval/`
+  - cuts a **fixed positional slice** from the top of `data/raw/corpus_mixture.txt` (e.g. first 50K lines) as the held-out eval set
+  - writes held-out text files and bucket splits under `data/eval/`
+  - must record the exact line range (start, end) in its manifest so `tokenize_shards.py` can skip those lines
+
+- `tokenize_shards.py`
+  - reads `data/raw/corpus_mixture.txt` **starting after the eval slice** (line offset from `make_lm_eval_sets.py` manifest)
+  - takes `--tokenizer [gpt2|mgpt2]`; writes `data/shards_gpt2/*.npy` and `data/shards_mgpt2/*.npy` (int32)
 
 ### SFT corpus
 

@@ -189,6 +189,7 @@ def _write_manifest(
     output_file: Path,
     seed: int,
     limit: int,
+    sort_buffer: str,
     weights: dict[str, float],
     lines_written: int,
 ) -> None:
@@ -197,6 +198,7 @@ def _write_manifest(
         "lines_written": lines_written,
         "seed": seed,
         "limit": limit,
+        "sort_buffer": sort_buffer,
         "datasets": DATASETS,
         "weights": weights,
     }
@@ -316,7 +318,8 @@ def build_corpus_mixture(
 
     _shuffle_inplace(output_file, seed=seed, sort_buffer=sort_buffer)
 
-    # _write_manifest(output_file, seed, limit, weights, written)
+    _write_manifest(output_file, seed=seed, limit=limit, sort_buffer=sort_buffer,
+                    weights=weights, lines_written=written)
     return written
 
 

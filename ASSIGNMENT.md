@@ -78,12 +78,16 @@ Build all raw corpora and tokenized shards needed across pretraining, SFT, and D
 All data work lives here; downstream training phases consume these outputs and add nothing to `scripts/data/`.
 
 ### Pretraining corpus
-- [TODO] implement `scripts/data/build_corpus_mixture.py`
-  - outputs a line-based corpus file (and/or doc-id mapping) with deterministic sampling
-- [TODO] implement `scripts/data/tokenize_shards.py`
-  - write `data/shards_gpt2/*.npy` and `data/shards_mgpt2/*.npy` (int32)
+- ✓ implement `scripts/data/build_corpus_mixture.py`
+  - streams FineWeb + Sangraha subsets; writes a **globally shuffled** line-based corpus to `data/raw/corpus_mixture.txt`
+  - shuffle is performed here (awk | GNU-sort | cut), not in the sharding step, so that `make_lm_eval_sets.py` and `tokenize_shards.py` are independent consumers with no ordering dependency between them
+  - both downstream scripts read from `corpus_mixture.txt` by **fixed line position**; eval lines must be skipped by `tokenize_shards.py` to prevent leakage
 - [TODO] implement `scripts/data/make_lm_eval_sets.py`
-  - heldout text sets and bucket splits
+  - cuts a fixed positional slice from the top of `data/raw/corpus_mixture.txt` (e.g. first 50K lines); writes held-out text files and bucket splits under `data/eval/`
+  - must record the exact line range used so `tokenize_shards.py` can skip it
+- [TODO] implement `scripts/data/tokenize_shards.py`
+  - reads `data/raw/corpus_mixture.txt` starting after the eval slice; tokenizes with gpt2 or mgpt2
+  - writes `data/shards_gpt2/*.npy` and `data/shards_mgpt2/*.npy` (int32)
 
 ### SFT corpus
 - [TODO] implement `scripts/data/build_sft_data.py`
