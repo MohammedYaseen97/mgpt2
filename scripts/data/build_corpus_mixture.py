@@ -19,9 +19,11 @@ Memory note:
   several GB and grows unboundedly over a multi-hour run.
 
   The interleave_datasets probability weights already produce the correct source
-  mixture without a shuffle buffer.  Global document-level shuffling is deferred
-  to the tokenize_shards.py step, where shards can be filled in randomised order
-  from the corpus file.
+  mixture without a shuffle buffer.  After writing, the corpus is globally
+  shuffled in-place using an awk | GNU-sort | cut pipeline, which is disk-safe
+  at any file size: awk prefixes every line with rand() (O(n) streaming),
+  sort spills to disk if the file exceeds --sort-buffer, and cut strips the
+  prefix.  The shuffled file atomically replaces the original.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any, Iterable
 
@@ -54,6 +57,7 @@ DEFAULT_OUTPUT_FILE = REPO_ROOT / "data" / "raw" / "corpus_mixture.txt"
 
 DEFAULT_LIMIT = 1_500_000       # ~1B tokens at ~650 tokens/doc average
 DEFAULT_SEED = 42
+DEFAULT_SORT_BUFFER = "2G"      # Memory budget for GNU sort; spills to disk beyond this
 
 # Release PyArrow memory pool + run GC every N documents written.
 # PyArrow accumulates decoded parquet row-group memory and doesn't return it to
@@ -94,10 +98,13 @@ def parse_args() -> argparse.Namespace:
         description="Build a pretraining corpus mixture from FineWeb and Sangraha (streaming).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--seed",        type=int,   default=DEFAULT_SEED)
-    parser.add_argument("--limit",       type=int,   default=DEFAULT_LIMIT,
+    parser.add_argument("--seed",         type=int,   default=DEFAULT_SEED)
+    parser.add_argument("--limit",        type=int,   default=DEFAULT_LIMIT,
                         help="Number of non-empty documents to write.")
-    parser.add_argument("--output-file", type=Path,  default=DEFAULT_OUTPUT_FILE)
+    parser.add_argument("--output-file",  type=Path,  default=DEFAULT_OUTPUT_FILE)
+    parser.add_argument("--sort-buffer",  type=str,   default=DEFAULT_SORT_BUFFER,
+                        help="Memory budget for GNU sort (e.g. 2G, 4G). "
+                             "Set safely below free RAM; sort spills to disk beyond this.")
 
     # Per-source sampling weights — must sum to 1.0
     parser.add_argument("--fineweb-weight",           type=float, default=DEFAULT_FINEWEB_WEIGHT)
@@ -199,6 +206,59 @@ def _write_manifest(
 
 
 # ---------------------------------------------------------------------------
+# Post-write shuffle
+# ---------------------------------------------------------------------------
+
+def _shuffle_inplace(path: Path, seed: int, sort_buffer: str) -> None:
+    """Globally shuffle a large text file in-place using awk | GNU sort | cut.
+
+    The pipeline is disk-safe at any file size:
+      1. awk  — prepends rand() to every line (pure streaming, no RAM growth).
+      2. sort — sorts by the random prefix; spills to disk when the file
+                exceeds sort_buffer, so set this safely below your free RAM.
+      3. cut  — strips the random prefix, restoring plain text lines.
+
+    The shuffled output is written to a .tmp sibling and then atomically
+    renamed over the original, so a crash mid-shuffle leaves the unshuffled
+    corpus intact rather than a corrupt file.
+    """
+    tmp = path.with_suffix(path.suffix + ".shuffle.tmp")
+
+    awk_cmd = f"awk -v seed={seed} 'BEGIN {{srand(seed)}} {{print rand(), $0}}'"
+    pipeline = (
+        f"{awk_cmd} {path!s} "
+        f"| sort -n -S {sort_buffer} "
+        f"| cut -d ' ' -f2- "
+        f"> {tmp!s}"
+    )
+
+    LOGGER.info("Shuffling corpus in-place (seed=%d, sort-buffer=%s)...", seed, sort_buffer)
+    result = subprocess.run(pipeline, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        LOGGER.error("Shuffle pipeline stderr:\n%s", result.stderr)
+        raise RuntimeError(f"Shuffle pipeline failed with exit code {result.returncode}.")
+
+    # Verify line counts match before replacing the original.
+    n_orig = int(subprocess.run(
+        ["wc", "-l", str(path)], capture_output=True, text=True, check=True,
+    ).stdout.split()[0])
+    n_shuffled = int(subprocess.run(
+        ["wc", "-l", str(tmp)], capture_output=True, text=True, check=True,
+    ).stdout.split()[0])
+
+    if n_orig != n_shuffled:
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Shuffle produced {n_shuffled} lines but original had {n_orig}. "
+            "Original corpus is untouched."
+        )
+
+    tmp.rename(path)
+    LOGGER.info("Shuffled corpus replaced original (%d lines, seed=%d).", n_shuffled, seed)
+
+
+# ---------------------------------------------------------------------------
 # Core
 # ---------------------------------------------------------------------------
 
@@ -208,8 +268,9 @@ def build_corpus_mixture(
     limit: int,
     output_file: Path,
     weights: dict[str, float],
+    sort_buffer: str = DEFAULT_SORT_BUFFER,
 ) -> int:
-    """Build and persist a mixed pretraining corpus.
+    """Build, shuffle, and persist a mixed pretraining corpus.
 
     Returns:
         Number of document lines written.
@@ -253,6 +314,8 @@ def build_corpus_mixture(
     temp_file.replace(output_file)
     LOGGER.info("Wrote %d documents to %s", written, output_file)
 
+    _shuffle_inplace(output_file, seed=seed, sort_buffer=sort_buffer)
+
     # _write_manifest(output_file, seed, limit, weights, written)
     return written
 
@@ -278,6 +341,7 @@ def main() -> None:
         limit=args.limit,
         output_file=args.output_file,
         weights=weights,
+        sort_buffer=args.sort_buffer,
     )
 
 
