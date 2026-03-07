@@ -56,8 +56,8 @@ You must provide:
 
 ### Goal
 Train a tokenizer with:
-- **GPT-2-exact tokenizer terms**: 256 bytes + 50,000 merges + 1 `<|endoftext|>` = 50,257 IDs
-- model padded vocab = 50304 (apples-to-apples with baseline GPT-2)
+- **GPT-2-exact tokenizer terms**: 256 bytes + 50,000 merges + 1 `<|endoftext|>` = **50,257 valid token IDs** (max ID = 50,256)
+- **model embedding matrix** padded to 50,304 (nearest multiple of 64 above 50,257, for GPU tensor-core alignment) — this applies identically to both the GPT-2 baseline model and the mgpt2 model; it is a model architecture constant, not a tokenizer vocab size
 
 ### Deliverables
 - `tokenizer/artifacts/mgpt2.model` and `tokenizer/artifacts/mgpt2.vocab`

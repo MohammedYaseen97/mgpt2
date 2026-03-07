@@ -413,10 +413,15 @@ Format: `{split}_{index:06d}_{array}.npy`
 
 ## Cross-cutting rules
 
-1. **dtype is always `int32`** across all three pipelines.  `uint16` would fit
-   GPT-2's 50,257-token vocab but not mgpt2's 50,304, and mixing dtypes across
-   tokenizers would be a silent bug.  `int32` is safe for all vocab sizes and
-   costs only 2× the memory of `uint16`.
+1. **dtype is always `int32`** across all three pipelines.  Both tokenizers
+   produce IDs in `[0, 50256]` (50,257 valid values; max ID = 50,256), so
+   `uint16` (max 65,535) would technically hold them.  The 50,304 figure is
+   the model embedding matrix dimension padded for GPU tensor-core alignment —
+   it is a model architecture constant, not a tokenizer vocab size, and the
+   tokenizer never emits an ID ≥ 50,257.  `int32` is used because it is the
+   dtype PyTorch embedding layers natively expect, it allows `-1` as an
+   explicit pad/ignore sentinel, and it is future-proof if the vocab ever
+   expands beyond 65,535.
 
 2. **Every shard directory must have a `manifest.json`** before any training
    script reads from it.  Training scripts should assert the manifest exists and
