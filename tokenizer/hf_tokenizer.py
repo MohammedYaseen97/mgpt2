@@ -16,6 +16,8 @@ class MGPT2Tokenizer(PreTrainedTokenizer):
     """
 
     model_input_names = ["input_ids", "attention_mask"]
+    # Let `PreTrainedTokenizer.from_pretrained()` know which file it should pass to `__init__`.
+    vocab_files_names = {"model_file": "tokenizer.model"}
 
     def __init__(self, model_file: str, **kwargs: Any):
         if not model_file.endswith(".model"):

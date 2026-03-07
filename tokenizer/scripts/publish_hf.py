@@ -39,6 +39,15 @@ def _copy_minimal_tokenizer_code(dst_root: Path) -> None:
     for name in keep:
         shutil.copy2(src_root / name, dst_pkg / name)
 
+    # Root module entrypoint for transformers dynamic loading.
+    # Some transformers versions expect `module.ClassName` (exactly one dot),
+    # so we provide a stable root module that re-exports the tokenizer class.
+    (dst_root / "tokenization_mgpt2.py").write_text(
+        "from tokenizer.hf_tokenizer import MGPT2Tokenizer\n\n"
+        "__all__ = ['MGPT2Tokenizer']\n",
+        encoding="utf-8",
+    )
+
 
 def _patch_tokenizer_config(repo_dir: Path) -> None:
     cfg_path = repo_dir / "tokenizer_config.json"
@@ -47,37 +56,84 @@ def _patch_tokenizer_config(repo_dir: Path) -> None:
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     cfg["tokenizer_class"] = "MGPT2Tokenizer"
     # Module path is relative to repo root when trust_remote_code=True
-    cfg["auto_map"] = {"AutoTokenizer": "tokenizer.hf_tokenizer.MGPT2Tokenizer"}
+    # transformers==5.x expects a 2-item list: [slow_ref, fast_ref]
+    # We provide a slow (pure-Python) tokenizer only.
+    cfg["auto_map"] = {"AutoTokenizer": ["tokenization_mgpt2.MGPT2Tokenizer", None]}
     cfg_path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 
 
-def _write_repo_readme(repo_dir: Path, repo_id: str, model_path: str, eval_text: str | None, eval_limit: int) -> None:
-    lines = []
-    lines.append(f"# {repo_id}")
-    lines.append("")
-    lines.append("Custom mgpt2 tokenizer (pure-Python) exported for Hugging Face `trust_remote_code=True`.")
-    lines.append("")
-    lines.append("## Usage")
-    lines.append("")
-    lines.append("```python")
-    lines.append("from transformers import AutoTokenizer")
-    lines.append("")
-    lines.append(f"tok = AutoTokenizer.from_pretrained({repo_id!r}, trust_remote_code=True)")
-    lines.append("print(tok.encode('hello world'))")
-    lines.append("```")
-    lines.append("")
-    lines.append("## Contents")
-    lines.append(f"- Trained tokenizer artifact: `{Path(model_path).name}` (native `.model` format)")
-    lines.append("- Python implementation under `tokenizer/` (loaded via `trust_remote_code`)") 
-    lines.append("")
-    if eval_text:
-        lines.append("## Evaluation")
-        lines.append("")
-        lines.append(f"Evaluated on `{Path(eval_text).name}` with `--limit {eval_limit}`.")
-        lines.append("See `evaluation.json` for metrics (bytes/token, p95 tokens/line, and bucket breakdown).")
-        lines.append("")
+def _write_repo_readme(
+    repo_dir: Path,
+    repo_id: str,
+    model_path: str,
+    eval_text: str | None,
+    eval_limit: int,
+    *,
+    heldout_excluded: bool,
+) -> None:
+    model_name = Path(model_path).name
+    heldout_name = Path(eval_text).name if eval_text else None
 
-    (repo_dir / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    md = []
+    md.append(f"# {repo_id}")
+    md.append("")
+    md.append("A **pure-Python** Byte-Pair Encoding tokenizer trained to better handle:")
+    md.append("- English")
+    md.append("- Hindi (Devanagari + transliterated Latin)")
+    md.append("- Kannada (Kannada script + transliterated Latin)")
+    md.append("")
+    md.append("This repo is meant to be used with `trust_remote_code=True`.")
+    md.append("")
+    md.append("## Quickstart")
+    md.append("")
+    md.append("```python")
+    md.append("from transformers import AutoTokenizer")
+    md.append("")
+    md.append(f"tok = AutoTokenizer.from_pretrained({repo_id!r}, trust_remote_code=True)")
+    md.append("text = \"Hello! नमस्ते! ನಮಸ್ಕಾರ! namaste! namaskara!\"")
+    md.append("ids = tok.encode(text)")
+    md.append("print(len(ids), ids[:20])")
+    md.append("print(tok.decode(ids))")
+    md.append("```")
+    md.append("")
+    md.append("## Tokenizer spec")
+    md.append("")
+    md.append("- **Vocabulary size**: 50,257 (GPT‑2 exact terms)")
+    md.append("  - 256 byte tokens + 50,000 merges + `<|endoftext|>`")
+    md.append("- **Special tokens**: `<|endoftext|>`")
+    md.append("- **Implementation**: custom python tokenizer under `tokenizer/` (loaded dynamically)")
+    md.append("")
+    md.append("## Training corpus (tokenizer)")
+    md.append("")
+    md.append("The tokenizer was trained on a deterministic mixture built from:")
+    md.append("- FineWeb‑Edu (English)")
+    md.append("- AI4Bharat Sangraha synthetic splits: `hin_Deva`, `hin_Latn`, `kan_Knda`, `kan_Latn`")
+    md.append("")
+    md.append("## Evaluation")
+    md.append("")
+    md.append("This repo includes `evaluation.json` with **tokenizer-only** metrics:")
+    md.append("- tokens per 1k bytes (lower is better)")
+    md.append("- p95 tokens per line (lower is better)")
+    md.append("- bucket breakdown: latin / devanagari / kannada / mixed")
+    md.append("")
+    if heldout_name:
+        md.append(f"Evaluation set: `{heldout_name}` (limit: {eval_limit} lines).")
+        if heldout_excluded:
+            md.append("Held-out lines were **excluded from tokenizer training** by exact line match.")
+        md.append("")
+    md.append("## Files")
+    md.append("")
+    md.append(f"- Native trained artifact: `{model_name}` (minbpe-style `.model` file)")
+    md.append("- `tokenizer.vocab` / `tokenizer.model` (HF artifacts generated from the native model)")
+    md.append("- `tokenization_mgpt2.py` (root module entrypoint for `transformers` dynamic loading)")
+    md.append("")
+    md.append("## Notes / limitations")
+    md.append("")
+    md.append("- This is a **slow tokenizer** (pure Python). It is intended for research and reproducibility.")
+    md.append("- Downstream LM metrics (perplexity, instruction following, DPO) are reported in the main mgpt2 project repo as controlled experiments vs a baseline GPT‑2 tokenizer/model.")
+    md.append("")
+
+    (repo_dir / "README.md").write_text("\n".join(md) + "\n", encoding="utf-8")
 
 
 def _run_evaluation(repo_dir: Path, eval_text: str, eval_limit: int, trained_model: str) -> None:
@@ -105,7 +161,16 @@ def main() -> None:
     ap.add_argument("--eval_text", default=None, help="Optional: path to held-out eval text file.")
     ap.add_argument("--eval_json", default=None, help="Optional: precomputed evaluation JSON to upload as evaluation.json.")
     ap.add_argument("--eval_limit", type=int, default=10000, help="How many lines to evaluate (if --eval_text).")
-    ap.add_argument("--commit_message", default="Upload mgpt2 tokenizer", help="Hub commit message.")
+    ap.add_argument(
+        "--heldout_excluded",
+        action="store_true",
+        help="Set this if you excluded held-out lines from training (documents this in the HF README).",
+    )
+    ap.add_argument(
+        "--commit_message",
+        default="Publish mgpt2 tokenizer (GPT-2 exact merges) + eval metrics",
+        help="Hub commit message.",
+    )
     ap.add_argument("--dry_run", action="store_true", help="Build staging folder locally but do not upload.")
     ap.add_argument("--staging_dir", default=None, help="Optional: write staging output to this directory (no temp).")
     args = ap.parse_args()
@@ -148,7 +213,14 @@ def main() -> None:
             _run_evaluation(repo_dir, args.eval_text, args.eval_limit, str(model_path))
 
         # 4) Write README
-        _write_repo_readme(repo_dir, args.repo_id, str(model_path), args.eval_text, args.eval_limit)
+        _write_repo_readme(
+            repo_dir,
+            args.repo_id,
+            str(model_path),
+            args.eval_text,
+            args.eval_limit,
+            heldout_excluded=bool(args.heldout_excluded),
+        )
 
         if args.dry_run:
             print(f"[dry_run] Staged files at: {repo_dir}")
