@@ -5,20 +5,23 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
 
 ---
 
-### Pretraining corpus
+### Pretraining corpus ✓ COMPLETE
 
 - `build_corpus_mixture.py` ✓
-  - streams FineWeb + Sangraha subsets (including translit variants); writes a **globally shuffled** line-based corpus to `data/raw/corpus_mixture.txt`
-  - the global shuffle (awk | GNU-sort | cut, seeded) runs as the final step of this script — not inside `tokenize_shards.py` — so that `make_lm_eval_sets.py` and `tokenize_shards.py` are independent consumers of the same file with no ordering dependency between them
+  - streams FineWeb + Sangraha subsets (including translit variants); writes a **globally shuffled** line-based corpus to `data/raw/corpus_mixture.txt` (15M docs)
+  - the global shuffle (awk | GNU-sort | cut, seeded) runs as the final step — not inside `tokenize_shards.py` — so that `make_lm_eval_sets.py` and `tokenize_shards.py` are independent consumers with no ordering dependency between them
 
-- `make_lm_eval_sets.py`
-  - cuts a **fixed positional slice** from the top of `data/raw/corpus_mixture.txt` (e.g. first 50K lines) as the held-out eval set
-  - writes held-out text files and bucket splits under `data/eval/`
-  - must record the exact line range (start, end) in its manifest so `tokenize_shards.py` can skip those lines
+- `make_lm_eval_sets.py` ✓
+  - cuts lines 14,850,000–15,000,000 (150K docs) as the held-out eval set; writes per-bucket text files under `data/eval/`
+  - actual bucket counts: latin 113,882 / deva 16,803 / knda 17,493 / mixed 1,822
+  - large `--eval-start` offsets are skipped at OS level via `tail -n +N` (no Python heap cost)
 
-- `tokenize_shards.py`
-  - reads `data/raw/corpus_mixture.txt` **starting after the eval slice** (line offset from `make_lm_eval_sets.py` manifest)
-  - takes `--tokenizer [gpt2|mgpt2]`; writes `data/shards_gpt2/*.npy` and `data/shards_mgpt2/*.npy` (int32)
+- `tokenize_shards.py` ✓
+  - reads manifest offsets from `data/eval/manifest.json` to skip the eval slice; splits remainder ~98/2 train/val
+  - **gpt2** (`tiktoken.get_encoding("gpt2")`): 313 train + 7 val shards, **31.86B tokens** → `data/shards_gpt2/`
+  - **mgpt2** (`RegexTokenizer.load("tokenizer/artifacts/mgpt2.model")`): 142 train + 3 val shards, **14.44B tokens** → `data/shards_mgpt2/`
+  - mgpt2 encodes the same corpus in 2.2× fewer tokens — direct evidence of Phase A tokenizer efficiency on the actual training data
+  - multiprocessing (`Pool.imap`, 14 workers) used for throughput; output is bit-for-bit identical to single-threaded
 
 ### SFT corpus
 

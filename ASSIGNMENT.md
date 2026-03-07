@@ -77,17 +77,13 @@ Train a tokenizer with:
 Build all raw corpora and tokenized shards needed across pretraining, SFT, and DPO.
 All data work lives here; downstream training phases consume these outputs and add nothing to `scripts/data/`.
 
-### Pretraining corpus
-- ✓ implement `scripts/data/build_corpus_mixture.py`
-  - streams FineWeb + Sangraha subsets; writes a **globally shuffled** line-based corpus to `data/raw/corpus_mixture.txt`
-  - shuffle is performed here (awk | GNU-sort | cut), not in the sharding step, so that `make_lm_eval_sets.py` and `tokenize_shards.py` are independent consumers with no ordering dependency between them
-  - both downstream scripts read from `corpus_mixture.txt` by **fixed line position**; eval lines must be skipped by `tokenize_shards.py` to prevent leakage
-- [TODO] implement `scripts/data/make_lm_eval_sets.py`
-  - cuts a fixed positional slice from the top of `data/raw/corpus_mixture.txt` (e.g. first 50K lines); writes held-out text files and bucket splits under `data/eval/`
-  - must record the exact line range used so `tokenize_shards.py` can skip it
-- [TODO] implement `scripts/data/tokenize_shards.py`
-  - reads `data/raw/corpus_mixture.txt` starting after the eval slice; tokenizes with gpt2 or mgpt2
-  - writes `data/shards_gpt2/*.npy` and `data/shards_mgpt2/*.npy` (int32)
+### Pretraining corpus ✓ COMPLETE
+- ✓ `scripts/data/build_corpus_mixture.py` — 15M docs, globally shuffled → `data/raw/corpus_mixture.txt`
+- ✓ `scripts/data/make_lm_eval_sets.py` — 150K lines (14,850,000–15,000,000) → `data/eval/` with 4 script buckets (latin 113,882 / deva 16,803 / knda 17,493 / mixed 1,822)
+- ✓ `scripts/data/tokenize_shards.py`
+  - **gpt2**: 313 train + 7 val shards, 31.86B tokens → `data/shards_gpt2/`
+  - **mgpt2**: 142 train + 3 val shards, 14.44B tokens → `data/shards_mgpt2/`
+  - mgpt2 is 2.2× more token-efficient on this corpus (14.4B vs 31.9B tokens for identical text)
 
 ### SFT corpus
 - [TODO] implement `scripts/data/build_sft_data.py`
@@ -165,5 +161,6 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 
 ## What to do next (recommended order)
 1) ~~Finish Phase A (final mgpt2 tokenizer + tokenizer_eval.json)~~ ✓ done
-2) Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)
-3) Implement Phase C eval (bucketed perplexity + HellaSwag) and run a small-scale baseline comparison
+2) ~~Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)~~ ✓ done
+3) Implement Phase B data pipeline — SFT and DPO corpora (`build_sft_data.py`, `tokenize_sft_shards.py`, `build_dpo_data.py`, `tokenize_dpo_shards.py`)
+4) Implement Phase C eval (bucketed perplexity + HellaSwag) and run a small-scale baseline comparison
