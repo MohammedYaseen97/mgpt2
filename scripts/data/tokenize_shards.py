@@ -1,9 +1,14 @@
+import json
 import logging
 import argparse
 
 from pathlib import Path
 
+import tiktoken
+import numpy as np
 from tqdm import tqdm
+
+from tokenizer.regex_tokenizer import RegexTokenizer
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -11,7 +16,8 @@ from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_CORPUS_FILE = REPO_ROOT / "data" / "raw" / "corpus_mixture.txt"
-DEFAULT_EVAL_DIR    = REPO_ROOT / "data" / "eval"
+DEFAULT_RAW_MANIFEST = REPO_ROOT / "data" / "raw" / "manifest.json"
+DEFAULT_EVAL_MANIFEST = REPO_ROOT / "data" / "eval" / "manifest.json"
 DEFAULT_SHARDS_DIR  = REPO_ROOT / "data" / "shards"
 
 LOGGER = logging.getLogger(__name__)
@@ -26,16 +32,9 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--corpus-file", type=Path, default=DEFAULT_CORPUS_FILE)
-    parser.add_argument(
-        "--validation-size",
-        type=int,
-        default=50_000,
-        help=(
-            "Number of lines to use for the validation set. "
-            "The validation set is taken from the lines remaining in the corpus after the eval slice is removed, "
-            "selecting from the end of this remainder."
-        ),
-    )
+    parser.add_argument("--raw-manifest", type=Path, default=DEFAULT_RAW_MANIFEST)
+    parser.add_argument("--eval-manifest", type=Path, default=DEFAULT_EVAL_MANIFEST)
+    parser.add_argument("--shard-size", type=int, default=1_000_000, help="Number of tokens per shard.")
     parser.add_argument("--tokenizer", type=str, default="gpt2", choices=["gpt2", "mgpt2"])
     parser.add_argument("--shards-dir", type=Path, default=DEFAULT_SHARDS_DIR)
     return parser.parse_args()
@@ -44,34 +43,70 @@ def parse_args() -> argparse.Namespace:
 # Core
 # ---------------------------------------------------------------------------
 
-def _load_tokenizer(tokenizer: str):
-    if tokenizer == "gpt2":
-        return GPT2Tokenizer.from_pretrained("gpt2")
-    elif tokenizer == "mgpt2":
-        return GPT2Tokenizer.from_pretrained("mgpt2")
-    else:
-        raise ValueError(f"Invalid tokenizer: {tokenizer}")
+def _load_manifest(raw_manifest: Path, eval_manifest: Path) -> tuple[int, int, int]:
+    with open(raw_manifest, "r", encoding="utf-8") as f:
+        raw_manifest = json.load(f)
+    with open(eval_manifest, "r", encoding="utf-8") as f:
+        eval_manifest = json.load(f)
+    return raw_manifest["lines_written"], eval_manifest["eval_line_start"], eval_manifest["eval_line_count"]
 
-def _tokenize_shards(corpus_file: Path, validation_size: int, tokenizer: str):
-    LOGGER.info("Tokenizing shards from %s (validation_size=%d)", corpus_file, validation_size)
+def _load_tokenizer(tokenizer_name: str):
+    if tokenizer_name == "gpt2":
+        # tiktoken_gpt2 — same library and encoding used in tokenizer/scripts/evaluate.py
+        # and in Karpathy's fineweb.py, so the controlled baseline is fully traceable.
+        return tiktoken.get_encoding("gpt2")
+    elif tokenizer_name == "mgpt2":
+        # RegexTokenizer.load() from the canonical local artifact — identical load path
+        # to tokenizer/scripts/evaluate.py; no network dependency during sharding.
+        tokenizer = RegexTokenizer()
+        tokenizer.load(str(REPO_ROOT / "tokenizer" / "artifacts" / "mgpt2.model"))
+        return tokenizer
+    else:
+        raise ValueError(f"Invalid tokenizer: {tokenizer_name}")
+
+def _write_shard(tokens: list[int], shard_idx: int):
+    shard_file = DEFAULT_SHARDS_DIR / f"shard_{shard_idx:06d}.npy"
+    np.save(shard_file, np.array(tokens, dtype=np.int32))
+
+def _make_shards(corpus_file: Path, total_size: int, eval_start: int, eval_size: int, tokenizer: RegexTokenizer, shard_size: int):
+    LOGGER.info("Tokenizing shards from %s (total_size=%d, eval_start=%d, eval_size=%d)", corpus_file, total_size, eval_start, eval_size)
     with open(corpus_file, "r", encoding="utf-8") as f:
         current_tokens = []
-        line_count = 0
         shard_idx = 0
         
-        for line in f:
-            tokens = tokenizer.encode(line)
+        val_lc = 0.02
+        
+        for i, line in enumerate(f):
+            if i >= eval_start and i < eval_start + eval_size:
+                continue
             
+            line = line.rstrip("\n")
+            tokens = tokenizer.encode(line) + tokenizer.encode("<|endoftext|>")
+            current_tokens.extend(tokens)
+            if len(current_tokens) >= shard_size:
+                _write_shard(current_tokens, shard_idx)
+                current_tokens = []
+                shard_idx += 1
+                
+        if current_tokens:
+            _write_shard(current_tokens, shard_idx)
+        
+        return shard_idx + 1
 
-def main():
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+
+def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = parse_args()
     
+    total_size, eval_start, eval_size = _load_manifest(args.raw_manifest, args.eval_manifest)
+    
     tokenizer = _load_tokenizer(args.tokenizer)
+    shard_count = _make_shards(args.corpus_file, total_size, eval_start, eval_size, tokenizer, args.shard_size)
     
-    _tokenize_shards(args.corpus_file, args.validation_size, args.tokenizer)
-    
-    _write_manifest(args.corpus_file, args.validation_size, args.tokenizer)
+    LOGGER.info("Made %d shards", shard_count)
 
 if __name__ == "__main__":
     main()
