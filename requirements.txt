@@ -15,6 +15,7 @@ filelock
 frozenlist
 fsspec
 huggingface-hub
+hf_transfer
 idna
 ipykernel
 ipython
