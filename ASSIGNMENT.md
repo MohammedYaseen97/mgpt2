@@ -77,6 +77,10 @@ Train a tokenizer with:
 Build all raw corpora and tokenized shards needed across pretraining, SFT, and DPO.
 All data work lives here; downstream training phases consume these outputs and add nothing to `scripts/data/`.
 
+**Reproducibility note:** every corpus in this phase is fully reproducible from its script + manifest.
+Nothing needs to be transferred to reach a cloud training machine — `git clone` the repo and re-run.
+Datasets are also published to HuggingFace Hub (see below) so any machine can pull them in one command.
+
 ### Pretraining corpus ✓ COMPLETE
 - ✓ `scripts/data/build_corpus_mixture.py` — 15M docs, globally shuffled → `data/raw/corpus_mixture.txt`
 - ✓ `scripts/data/make_lm_eval_sets.py` — 150K lines (14,850,000–15,000,000) → `data/eval/` with 4 script buckets (latin 113,882 / deva 16,803 / knda 17,493 / mixed 1,822)
@@ -96,6 +100,20 @@ All data work lives here; downstream training phases consume these outputs and a
   - downloads IndicAlign toxic split; produces aligned chosen/rejected pair splits with train/val held-out
 - [TODO] implement `scripts/data/tokenize_dpo_shards.py`
   - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards
+
+### HuggingFace dataset releases (Phase B deliverable)
+Each corpus is published as a versioned private HF dataset with a dataset card documenting sources,
+mixture weights, splits, and reproduction commands. This makes the data pull-ready on any training
+machine (`datasets.load_dataset(...)`) and satisfies the reproducibility requirement independently
+of local disk state.
+
+- [TODO] implement `scripts/data/publish_pretraining_dataset.py`
+  - pushes `corpus_mixture.txt` (or regenerates from script) as `ace-1/mgpt2-pretrain-corpus` (private)
+  - dataset card: sources, weights, shuffle seed, eval slice, manifest contents
+- [TODO] implement `scripts/data/publish_sft_dataset.py`
+  - pushes `data/sft/train.jsonl` + `data/sft/val.jsonl` as `ace-1/mgpt2-sft-data` (private)
+- [TODO] implement `scripts/data/publish_dpo_dataset.py`
+  - pushes `data/dpo/train.jsonl` + `data/dpo/val.jsonl` as `ace-1/mgpt2-dpo-data` (private)
 
 ### Checks
 - [TODO] implement `scripts/checks/check_shards.py`
@@ -162,5 +180,6 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 ## What to do next (recommended order)
 1) ~~Finish Phase A (final mgpt2 tokenizer + tokenizer_eval.json)~~ ✓ done
 2) ~~Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)~~ ✓ done
-3) Implement Phase B data pipeline — SFT and DPO corpora (`build_sft_data.py`, `tokenize_sft_shards.py`, `build_dpo_data.py`, `tokenize_dpo_shards.py`)
-4) Implement Phase C eval (bucketed perplexity + HellaSwag) and run a small-scale baseline comparison
+3) Move to cloud GPU: `git clone` repo, re-run `tokenize_shards.py` for both tokenizers (fast with many cores)
+4) Implement Phase C (pretraining) — scripts, eval, HellaSwag, report
+5) Implement Phase B SFT + DPO corpora and HF dataset releases (can be done in parallel with or after Phase C)
