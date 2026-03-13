@@ -27,7 +27,7 @@ FILE_MAP = [
     ("tokenizer.model", "mgpt2.model", True),
     ("tokenizer.vocab", "mgpt2.vocab", True),
     ("evaluation.json", "tokenizer_eval.json", True),
-    ("heldout_eval.txt", "heldout_eval.txt", True),
+    ("heldout_eval.txt", "heldout_eval.txt", False),
 ]
 
 
