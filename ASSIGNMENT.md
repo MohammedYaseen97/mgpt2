@@ -162,9 +162,29 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 
 ---
 
+## Cloud setup (bootstrapping a new machine)
+
+All data is reproducible from public HF datasets + scripts. Only the tokenizer artifact
+(`mgpt2.model`) is unique. It lives in the published HF tokenizer repo and can be restored with:
+
+```bash
+git clone <repo>
+pip install -r requirements.txt
+export HF_TOKEN=<your_token>
+python scripts/download_tokenizer_artifacts.py --repo_id ace-1/mgpt2-tokenizer
+```
+
+`scripts/download_tokenizer_artifacts.py` fetches the canonical HF filenames
+(`tokenizer.model`, `tokenizer.vocab`, `evaluation.json`, `heldout_eval.txt`) and places them
+in `tokenizer/artifacts/` under their local names (`mgpt2.model`, `mgpt2.vocab`,
+`tokenizer_eval.json`, `heldout_eval.txt`) — exactly as they appear in the local repo.
+After this step the machine is fully bootstrapped; run the data scripts as normal.
+
+---
+
 ## What to do next (recommended order)
 1) ~~Finish Phase A (final mgpt2 tokenizer + tokenizer_eval.json)~~ ✓ done
 2) ~~Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)~~ ✓ done
-3) Move to cloud GPU: `git clone` repo, re-run `tokenize_shards.py` for both tokenizers (fast with many cores)
+3) Move to cloud GPU: `git clone` → `download_tokenizer_artifacts.py` → re-run data scripts
 4) Implement Phase C (pretraining) — scripts, eval, HellaSwag, report
-5) Implement Phase B SFT + DPO corpora and HF dataset releases (can be done in parallel with or after Phase C)
+5) Implement Phase B SFT + DPO corpora (can be done in parallel with or after Phase C)

@@ -46,3 +46,17 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
 - fixed seeds; all sampling parameters passed explicitly, never hardcoded
 - write a `manifest.json` alongside every output directory: dataset IDs, splits, seeds, sampling weights, git commit hash
 - **nothing here is irreplaceable** — every artifact is derivable from `git clone` + re-run
+
+---
+
+### Cloud bootstrap
+
+The only non-reproducible artifact is the trained tokenizer model (`tokenizer/artifacts/mgpt2.model`).
+It is fetched from the published HF tokenizer repo using:
+
+```bash
+python scripts/download_tokenizer_artifacts.py --repo_id ace-1/mgpt2-tokenizer
+```
+
+This maps HF filenames → local `tokenizer/artifacts/` names and is idempotent.
+After it runs, all data scripts above can be executed as normal.
