@@ -39,20 +39,6 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
 - `tokenize_dpo_shards.py`
   - reads `data/dpo/`; writes shards under `data/shards_dpo/`; chosen/rejected alignment must be maintained across shards
 
-### HuggingFace dataset releases
-
-Every corpus is published to a private HF dataset repo as a first-class Phase B deliverable.
-This serves two purposes: (1) each dataset is pull-ready on any cloud training machine via
-`datasets.load_dataset(...)`, and (2) it documents the dataset publicly as part of the project.
-No data files need to be manually transferred — `git clone` + script re-run is always sufficient.
-
-- `publish_pretraining_dataset.py` → `ace-1/mgpt2-pretrain-corpus`
-- `publish_sft_dataset.py`         → `ace-1/mgpt2-sft-data`
-- `publish_dpo_dataset.py`         → `ace-1/mgpt2-dpo-data`
-
-Each script attaches a dataset card with sources, mixture weights, shuffle seed, eval slice, and
-the exact CLI command to reproduce the corpus locally from scratch.
-
 ---
 
 ### Reproducibility (required for every script)

@@ -79,7 +79,6 @@ All data work lives here; downstream training phases consume these outputs and a
 
 **Reproducibility note:** every corpus in this phase is fully reproducible from its script + manifest.
 Nothing needs to be transferred to reach a cloud training machine — `git clone` the repo and re-run.
-Datasets are also published to HuggingFace Hub (see below) so any machine can pull them in one command.
 
 ### Pretraining corpus ✓ COMPLETE
 - ✓ `scripts/data/build_corpus_mixture.py` — 15M docs, globally shuffled → `data/raw/corpus_mixture.txt`
@@ -100,20 +99,6 @@ Datasets are also published to HuggingFace Hub (see below) so any machine can pu
   - downloads IndicAlign toxic split; produces aligned chosen/rejected pair splits with train/val held-out
 - [TODO] implement `scripts/data/tokenize_dpo_shards.py`
   - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards
-
-### HuggingFace dataset releases (Phase B deliverable)
-Each corpus is published as a versioned private HF dataset with a dataset card documenting sources,
-mixture weights, splits, and reproduction commands. This makes the data pull-ready on any training
-machine (`datasets.load_dataset(...)`) and satisfies the reproducibility requirement independently
-of local disk state.
-
-- [TODO] implement `scripts/data/publish_pretraining_dataset.py`
-  - pushes `corpus_mixture.txt` (or regenerates from script) as `ace-1/mgpt2-pretrain-corpus` (private)
-  - dataset card: sources, weights, shuffle seed, eval slice, manifest contents
-- [TODO] implement `scripts/data/publish_sft_dataset.py`
-  - pushes `data/sft/train.jsonl` + `data/sft/val.jsonl` as `ace-1/mgpt2-sft-data` (private)
-- [TODO] implement `scripts/data/publish_dpo_dataset.py`
-  - pushes `data/dpo/train.jsonl` + `data/dpo/val.jsonl` as `ace-1/mgpt2-dpo-data` (private)
 
 ### Checks
 - [TODO] implement `scripts/checks/check_shards.py`
