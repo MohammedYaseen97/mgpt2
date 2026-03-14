@@ -8,8 +8,10 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
 ### Pretraining corpus ✓ COMPLETE
 
 - `build_corpus_mixture.py` ✓
-  - streams FineWeb + Sangraha subsets (including translit variants); writes a **globally shuffled** line-based corpus to `data/raw/corpus_mixture.txt` (15M docs)
-  - the global shuffle (awk | GNU-sort | cut, seeded) runs as the final step — not inside `tokenize_shards.py` — so that `make_lm_eval_sets.py` and `tokenize_shards.py` are independent consumers with no ordering dependency between them
+  - streams FineWeb + Sangraha subsets; writes a **globally shuffled** line-based corpus to `data/raw/corpus_mixture.txt`
+  - native-script splits use Sangraha `verified/` (scraped websites + OCR + transcriptions); Latin splits use `synthetic/` (no verified alternative)
+  - weights: 55% FineWeb / 18% `verified/hin` / 7% `synthetic/hin_Latn` / 13% `verified/kan` / 7% `synthetic/kan_Latn`
+  - global shuffle (awk | GNU-sort | cut, seeded) runs as the final step so `make_lm_eval_sets.py` and `tokenize_shards.py` are independent consumers
 
 - `make_lm_eval_sets.py` ✓
   - cuts lines 14,850,000–15,000,000 (150K docs) as the held-out eval set; writes per-bucket text files under `data/eval/`
@@ -18,9 +20,8 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
 
 - `tokenize_shards.py` ✓
   - reads manifest offsets from `data/eval/manifest.json` to skip the eval slice; splits remainder ~98/2 train/val
-  - **gpt2** (`tiktoken.get_encoding("gpt2")`): 313 train + 7 val shards, **31.86B tokens** → `data/shards_gpt2/`
-  - **mgpt2** (`RegexTokenizer.load("tokenizer/artifacts/mgpt2.model")`): 142 train + 3 val shards, **14.44B tokens** → `data/shards_mgpt2/`
-  - mgpt2 encodes the same corpus in 2.2× fewer tokens — direct evidence of Phase A tokenizer efficiency on the actual training data
+  - **gpt2** (`tiktoken.get_encoding("gpt2")`): 100M-token int32 shards → `data/shards_gpt2/`
+  - **mgpt2** (`RegexTokenizer.load("tokenizer/artifacts/mgpt2.model")`): 100M-token int32 shards → `data/shards_mgpt2/`
   - multiprocessing (`Pool.imap`, 14 workers) used for throughput; output is bit-for-bit identical to single-threaded
 
 ### SFT corpus

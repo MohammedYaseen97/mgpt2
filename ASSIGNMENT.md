@@ -80,13 +80,11 @@ All data work lives here; downstream training phases consume these outputs and a
 **Reproducibility note:** every corpus in this phase is fully reproducible from its script + manifest.
 Nothing needs to be transferred to reach a cloud training machine — `git clone` the repo and re-run.
 
-### Pretraining corpus ✓ COMPLETE
+### Pretraining corpus ✓ scripts complete
 - ✓ `scripts/data/build_corpus_mixture.py` — 15M docs, globally shuffled → `data/raw/corpus_mixture.txt`
-- ✓ `scripts/data/make_lm_eval_sets.py` — 150K lines (14,850,000–15,000,000) → `data/eval/` with 4 script buckets (latin 113,882 / deva 16,803 / knda 17,493 / mixed 1,822)
-- ✓ `scripts/data/tokenize_shards.py`
-  - **gpt2**: 313 train + 7 val shards, 31.86B tokens → `data/shards_gpt2/`
-  - **mgpt2**: 142 train + 3 val shards, 14.44B tokens → `data/shards_mgpt2/`
-  - mgpt2 is 2.2× more token-efficient on this corpus (14.4B vs 31.9B tokens for identical text)
+  - 55% FineWeb / 18% Sangraha `verified/hin` / 7% `synthetic/hin_Latn` / 13% `verified/kan` / 7% `synthetic/kan_Latn`
+- ✓ `scripts/data/make_lm_eval_sets.py` — 150K lines (14,850,000–15,000,000) → `data/eval/`
+- ✓ `scripts/data/tokenize_shards.py` — packs docs into 100M-token int32 shards; ~98/2 train/val split
 
 ### SFT corpus
 - [TODO] implement `scripts/data/build_sft_data.py`

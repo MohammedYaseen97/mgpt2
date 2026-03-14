@@ -65,23 +65,32 @@ DEFAULT_SORT_BUFFER = "2G"      # Memory budget for GNU sort; spills to disk bey
 _GC_INTERVAL = 1_000
 
 # Sampling weights — must sum to 1.0.
-# Native-script sources weighted slightly above transliterated counterparts
-# so the tokenizer's non-Latin merges are well represented.
-DEFAULT_FINEWEB_WEIGHT          = 0.60
-DEFAULT_SANGRAHA_HI_DEVA_WEIGHT = 0.12   # Hindi, Devanagari
-DEFAULT_SANGRAHA_HI_LATN_WEIGHT = 0.08   # Hindi, transliterated
-DEFAULT_SANGRAHA_KAN_KNDA_WEIGHT = 0.12  # Kannada, native script
-DEFAULT_SANGRAHA_KAN_LATN_WEIGHT = 0.08  # Kannada, transliterated
+#
+# Native-script sources use Sangraha *verified* splits (scraped from human-verified
+# websites + OCR + transcriptions) — real Hindi/Kannada text, not machine translation.
+# Latin transliteration splits have no verified equivalent; synthetic is the only source.
+#
+# Weight rationale:
+#   55% English  — strong base for instruction following + general capability
+#   18% Hindi Deva (verified)  — real native Hindi; primary practical-use target
+#    7% Hindi Latin (synthetic) — code-switching / transliterated queries
+#   13% Kannada script (verified) — real native Kannada
+#    7% Kannada Latin (synthetic) — code-switching / transliterated queries
+DEFAULT_FINEWEB_WEIGHT           = 0.55
+DEFAULT_SANGRAHA_HI_DEVA_WEIGHT  = 0.18   # Hindi, Devanagari  — verified
+DEFAULT_SANGRAHA_HI_LATN_WEIGHT  = 0.07   # Hindi, transliterated — synthetic (no alternative)
+DEFAULT_SANGRAHA_KAN_KNDA_WEIGHT = 0.13   # Kannada, native script — verified
+DEFAULT_SANGRAHA_KAN_LATN_WEIGHT = 0.07   # Kannada, transliterated — synthetic (no alternative)
 
 # ---------------------------------------------------------------------------
 # Dataset registry — single source of truth for HF dataset IDs / data_dirs
 # ---------------------------------------------------------------------------
 
 DATASETS = {
-    "fineweb":            {"path": "HuggingFaceFW/fineweb", "name": "sample-10BT"},
-    "sangraha_hin_deva":  {"path": "ai4bharat/sangraha", "data_dir": "synthetic/hin_Deva"},
+    "fineweb":            {"path": "HuggingFaceFW/fineweb",   "name": "sample-10BT"},
+    "sangraha_hin_deva":  {"path": "ai4bharat/sangraha", "data_dir": "verified/hin"},
     "sangraha_hin_latn":  {"path": "ai4bharat/sangraha", "data_dir": "synthetic/hin_Latn"},
-    "sangraha_kan_knda":  {"path": "ai4bharat/sangraha", "data_dir": "synthetic/kan_Knda"},
+    "sangraha_kan_knda":  {"path": "ai4bharat/sangraha", "data_dir": "verified/kan"},
     "sangraha_kan_latn":  {"path": "ai4bharat/sangraha", "data_dir": "synthetic/kan_Latn"},
 }
 

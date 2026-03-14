@@ -83,11 +83,11 @@ Actual run parameters (from `data/raw/manifest.json`):
 |---|---|
 | lines_written | 15,000,000 |
 | seed | 42 |
-| fineweb weight | 0.60 |
-| sangraha hin_Deva weight | 0.12 |
-| sangraha hin_Latn weight | 0.08 |
-| sangraha kan_Knda weight | 0.12 |
-| sangraha kan_Latn weight | 0.08 |
+| fineweb (`sample-10BT`) weight | 0.55 |
+| sangraha `verified/hin` weight | 0.18 |
+| sangraha `synthetic/hin_Latn` weight | 0.07 |
+| sangraha `verified/kan` weight | 0.13 |
+| sangraha `synthetic/kan_Latn` weight | 0.07 |
 
 ### Train / val / eval split
 
@@ -255,17 +255,21 @@ The `tokens` array contains the complete sequence: prompt tokens followed by
 response tokens followed by EOT.  The `mask` array is `0` for every prompt
 token and `1` for every response token and the final EOT.
 
-Toy example:
+Toy example (seq_len = 1024; only first and last positions shown):
 
 ```
 Prompt:   "Translate to Hindi: Hello"   → token IDs [91, 2604, 311, 39452, 25, 18435]
 Response: "नमस्ते"                       → token IDs [30501, 30502]
-EOT:                                    → token ID  50256
+EOT:      (end of response)             → token ID  50256
+Padding:  (fill to 1024)                → token ID  50256  ×  1015 times
 
-tokens: [ 91, 2604, 311, 39452, 25, 18435, 30501, 30502, 50256 ]
-mask:   [  0,    0,   0,     0,  0,     0,     1,     1,     1 ]
-         ←————————— prompt —————————————→ ←— response + EOT ——→
+tokens: [ 91, 2604, 311, 39452, 25, 18435, 30501, 30502, 50256, 50256, …, 50256 ]
+mask:   [  0,    0,   0,     0,  0,     0,     1,     1,     1,     0, …,     0 ]
+         ←————————— prompt —————————————→ ←— response + EOT ——→ ←——— padding ——→
 ```
+
+The response-EOT position (mask=1) and the padding positions (mask=0) both use token
+ID 50256, but are distinguished solely by the mask.  Padding never contributes to loss.
 
 During the forward pass the model sees `tokens[:-1]` as input and predicts
 `tokens[1:]`; loss is computed only at positions where `mask[1:] == 1`.
@@ -274,7 +278,9 @@ During the forward pass the model sees `tokens[:-1]` as input and predicts
 |---|---|
 | dtype | `int32` for both arrays |
 | alignment | `tokens[i]` and `mask[i]` always correspond to the same position |
-| padding | zero-padded to a fixed sequence length within each shard |
+| seq_len | fixed at `model_max_len = 1024`; shorter sequences padded, longer truncated (response trimmed, prompt kept) |
+| pad token | EOT = 50256 — token 0 is a real vocabulary token and must not be used for padding |
+| padding mask | mask = 0 at all padding positions; padding never contributes to loss |
 | EOT | appended at end of response; mask = 1 |
 | prompt tokens | mask = 0 (loss ignored) |
 
@@ -305,7 +311,7 @@ Format: `{split}_{index:06d}_{array}.npy`
   "seed":                42,
   "n_train_examples":    "<N>",
   "n_val_examples":      "<N>",
-  "max_seq_len":         "<N>",
+  "max_seq_len":         1024,
   "n_train_shards":      "<N>",
   "n_val_shards":        "<N>",
   "dtype":               "int32"
@@ -355,9 +361,9 @@ Prompt:   "Is this toxic?"             → [91, 318, 428, 11,  30945, 30, EOT]  
 Chosen:   "No, it is respectful."      → [2949, 11, 340, 318, 46512, 13, EOT]
 Rejected: "Yes, kill them all."        → [3363, 11, 1494, 606, 477, 13, EOT]
 
-chosen   = [ 91, 318, 428, 11, 30945, 30,  2949, 11, 340, 318, 46512, 13, 50256 ]
-rejected = [ 91, 318, 428, 11, 30945, 30,  3363, 11, 1494, 606, 477,  13, 50256 ]
-            ←————————— prompt (len=6) ————————→ ←——— response + EOT ———————————→
+chosen   = [ 91, 318, 428, 11, 30945, 30,  2949, 11, 340, 318, 46512, 13, 50256, 50256, …, 50256 ]
+rejected = [ 91, 318, 428, 11, 30945, 30,  3363, 11, 1494, 606, 477,  13, 50256, 50256, …, 50256 ]
+            ←————————— prompt (len=6) ————————→ ←——— response + EOT ———————————→ ←— padding ——→
 
 prompt_lens = [ 6 ]    ← same value applies to both chosen and rejected for this example
 ```
@@ -365,13 +371,16 @@ prompt_lens = [ 6 ]    ← same value applies to both chosen and rejected for th
 Note: the prompt is **not** followed by EOT in the sequence — it flows directly
 into the response.  EOT is appended only at the end of the response.  The
 `prompt_lens` value is the number of prompt tokens before the response starts.
+Padding positions (after the response EOT) use token ID 50256 and are excluded
+from loss by the DPO trainer using `prompt_lens` + actual sequence length.
 
 | Property | Value |
 |---|---|
 | dtype | `int32` for all three arrays |
 | alignment | `chosen[i]`, `rejected[i]`, `prompt_lens[i]` always the same prompt |
-| EOT | appended at end of each response |
-| padding | zero-padded to max length within shard; pad tokens excluded from loss |
+| seq_len | fixed at `model_max_len = 1024`; shorter sequences padded, longer truncated (response trimmed, prompt kept) |
+| pad token | EOT = 50256 — token 0 is a real vocabulary token and must not be used for padding |
+| EOT | appended at end of each response; padding positions after also use EOT but are excluded from loss |
 | prompt in sequence | prompt tokens are identical prefix in chosen and rejected |
 
 ### File naming — DPO
@@ -402,7 +411,7 @@ Format: `{split}_{index:06d}_{array}.npy`
   "seed":                42,
   "n_train_pairs":       "<N>",
   "n_val_pairs":         "<N>",
-  "max_seq_len":         "<N>",
+  "max_seq_len":         1024,
   "n_train_shards":      "<N>",
   "n_val_shards":        "<N>",
   "dtype":               "int32"
