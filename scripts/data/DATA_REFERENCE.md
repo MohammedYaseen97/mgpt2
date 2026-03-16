@@ -225,31 +225,59 @@ Format: `{split}_{index:06d}.npy`
 
 ## SFT (IndicAlign Instruct)
 
-### Source
+### Source and composition
 
-HuggingFace dataset: `ai4bharat/IndicAlign`, instruct split.
+HuggingFace dataset: `ai4bharat/indic-align` (note lowercase, hyphenated).
 
-`build_sft_data.py` downloads this split, preserves prompt/response boundaries,
-and writes:
-- `data/sft/train.jsonl` — training examples
-- `data/sft/val.jsonl`   — validation examples
+**Target: 30,000 examples total, language distribution mirrors pretraining weights.**
 
-Each JSONL line: `{"prompt": "…", "response": "…"}`.
+| Language | Count | Ratio | Source config(s) |
+|---|---|---|---|
+| `eng_Latn` | 16,500 | 55% | Anudesh (crowd-sourced native English) |
+| `hin_Deva` | 5,400 | 18% | Dolly_T + OpenAssistant_T pool, partition A |
+| `kan_Knda` | 3,900 | 13% | Dolly_T + OpenAssistant_T pool, partition B |
+| `hin_Latn` | 2,100 | 7% | Dolly_T + OpenAssistant_T pool, partition C |
+| `kan_Latn` | 2,100 | 7% | Dolly_T + OpenAssistant_T pool, partition D |
+
+**Disjoint row partitioning:** Dolly_T (15K rows) and OpenAssistant_T (19.9K rows)
+are pooled (34.9K rows), shuffled with a fixed seed, then sliced into 4 non-overlapping
+partitions.  A given source row contributes exactly ONE language column to the final
+dataset — the same English content never appears in multiple scripts.
+
+**Multi-turn:** only the first turn of each conversation is used.  Subsequent turns
+are context-dependent and unsuitable for single-turn SFT at this model scale.
+
+**Known quality note:** ~10% of Dolly_T Latin-script rows have prompt/response
+swapped (dataset-level issue).  The script detects and corrects these by aligning
+against the `eng_Latn` column of the same row before partitioning.
+
+`build_sft_data.py` writes:
+- `data/sft/train.jsonl` — 90% of examples
+- `data/sft/val.jsonl`   — 10% of examples
+
+Each JSONL line: `{"prompt": "…", "response": "…", "lang": "hin_Deva"}`.
+The `lang` field is included for per-language loss monitoring and eval bucketing.
 
 ### Train / val split
 
-Deterministic positional cut after shuffling with a fixed seed (no stratified
-sampling needed — the dataset is already multilingual).  The exact cut point is
-recorded in the manifest.
+90/10 positional cut after a global shuffle with a fixed seed.  The exact counts
+are recorded in the manifest.  There is no separate test set — SFT quality is
+evaluated through the fixed prompt suite in `eval/sft_eval.py` (generative eval)
+and a perplexity regression check on the pretraining eval buckets.
 
 ### Shard format — SFT
 
-Each shard is **two parallel `int32` NumPy arrays** of the same length:
+Each shard is **two parallel `int32` NumPy arrays**, both of shape
+`(N_examples_in_shard, seq_len)`:
 
 ```
-{split}_{index:06d}_tokens.npy   — full token sequence
-{split}_{index:06d}_mask.npy     — loss mask (0 = ignore, 1 = compute loss)
+{split}_{index:06d}_tokens.npy   — shape (N, 1024)  int32  full token sequence
+{split}_{index:06d}_mask.npy     — shape (N, 1024)  int32  loss mask (0=ignore, 1=compute)
 ```
+
+Each **row** is one complete padded example.  The DataLoader indexes directly by
+example: `tokens[i]`, `mask[i]`.  Examples must never be stitched across row
+boundaries in the loss window.
 
 The `tokens` array contains the complete sequence: prompt tokens followed by
 response tokens followed by EOT.  The `mask` array is `0` for every prompt
@@ -263,26 +291,41 @@ Response: "नमस्ते"                       → token IDs [30501, 30502
 EOT:      (end of response)             → token ID  50256
 Padding:  (fill to 1024)                → token ID  50256  ×  1015 times
 
-tokens: [ 91, 2604, 311, 39452, 25, 18435, 30501, 30502, 50256, 50256, …, 50256 ]
-mask:   [  0,    0,   0,     0,  0,     0,     1,     1,     1,     0, …,     0 ]
-         ←————————— prompt —————————————→ ←— response + EOT ——→ ←——— padding ——→
+tokens[i]: [ 91, 2604, 311, 39452, 25, 18435, 30501, 30502, 50256, 50256, …, 50256 ]
+mask[i]:   [  0,    0,   0,     0,  0,     0,     1,     1,     1,     0, …,     0 ]
+            ←————————— prompt —————————————→ ←— response + EOT ——→ ←——— padding ——→
 ```
 
 The response-EOT position (mask=1) and the padding positions (mask=0) both use token
 ID 50256, but are distinguished solely by the mask.  Padding never contributes to loss.
 
-During the forward pass the model sees `tokens[:-1]` as input and predicts
-`tokens[1:]`; loss is computed only at positions where `mask[1:] == 1`.
+Training loop per example:
+
+```python
+tokens = np.load("train_000000_tokens.npy")  # (N, 1024)
+mask   = np.load("train_000000_mask.npy")    # (N, 1024)
+# input / target / loss mask for one example i:
+x    = tokens[i, :-1]   # (1023,)
+y    = tokens[i, 1:]    # (1023,)
+m    = mask[i, 1:]      # (1023,)  — loss computed only where m == 1
+```
 
 | Property | Value |
 |---|---|
 | dtype | `int32` for both arrays |
-| alignment | `tokens[i]` and `mask[i]` always correspond to the same position |
+| shape | `(N_examples_in_shard, 1024)` — 2D, one row per example |
+| alignment | `tokens[i, j]` and `mask[i, j]` always correspond to the same position |
 | seq_len | fixed at `model_max_len = 1024`; shorter sequences padded, longer truncated (response trimmed, prompt kept) |
 | pad token | EOT = 50256 — token 0 is a real vocabulary token and must not be used for padding |
 | padding mask | mask = 0 at all padding positions; padding never contributes to loss |
 | EOT | appended at end of response; mask = 1 |
 | prompt tokens | mask = 0 (loss ignored) |
+
+### Tokenizer — SFT
+
+**mgpt2 only.** The gpt2-tokenized model is retired after Phase C. Phase D's
+controlled baseline is the same mgpt2 pretrained model *without* SFT — not a
+gpt2 model. No gpt2 SFT shard is needed.
 
 ### File naming — SFT
 
@@ -305,7 +348,7 @@ Format: `{split}_{index:06d}_{array}.npy`
 
 ```json
 {
-  "source":              "ai4bharat/IndicAlign (instruct split)",
+  "source":              "ai4bharat/indic-align (Dolly_T + OpenAssistant_T + Anudesh)",
   "tokenizer":           "mgpt2",
   "tokenizer_artifact":  { "path": "tokenizer/artifacts/mgpt2.model", "sha256": "…" },
   "seed":                42,
@@ -382,6 +425,11 @@ from loss by the DPO trainer using `prompt_lens` + actual sequence length.
 | pad token | EOT = 50256 — token 0 is a real vocabulary token and must not be used for padding |
 | EOT | appended at end of each response; padding positions after also use EOT but are excluded from loss |
 | prompt in sequence | prompt tokens are identical prefix in chosen and rejected |
+
+### Tokenizer — DPO
+
+**mgpt2 only.** Same reasoning as SFT. Phase E's controlled baseline is the
+Phase D SFT model pre-DPO — not a gpt2 model.
 
 ### File naming — DPO
 

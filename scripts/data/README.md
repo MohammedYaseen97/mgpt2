@@ -24,13 +24,24 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
   - **mgpt2** (`RegexTokenizer.load("tokenizer/artifacts/mgpt2.model")`): 100M-token int32 shards → `data/shards_mgpt2/`
   - multiprocessing (`Pool.imap`, 14 workers) used for throughput; output is bit-for-bit identical to single-threaded
 
-### SFT corpus
+### SFT corpus ✓ COMPLETE
 
-- `build_sft_data.py`
-  - reads IndicAlign instruct split; writes train/val splits with prompt boundaries preserved under `data/sft/`
+- `build_sft_data.py` ✓
+  - streams `ai4bharat/indic-align` configs `Dolly_T`, `OpenAssistant_T`, and `Anudesh` from HF Hub
+  - language distribution mirrors pretraining weights: 55% `eng_Latn` / 18% `hin_Deva` / 7% `hin_Latn` / 13% `kan_Knda` / 7% `kan_Latn`
+  - **disjoint row partitioning**: each source row is assigned to exactly one language variant; translated copies of the same row are never used more than once across variants
+  - swap-correction heuristic detects and fixes prompt/response inversions in Latin-script columns (Dolly_T) using the `eng_Latn` column as length-ratio reference
+  - global shuffle (seed=42) + 90/10 positional train/val cut → `data/sft/train.jsonl`, `data/sft/val.jsonl`, `data/sft/manifest.json`
+  - output fields per example: `{"prompt": "…", "response": "…", "lang": "hin_Deva"}`
 
-- `tokenize_sft_shards.py`
-  - reads `data/sft/`; writes shards under `data/shards_sft/`; prompt/response boundary must be encoded per example
+- `tokenize_sft_shards.py` ✓
+  - **mgpt2 only** — gpt2-tokenized model is retired after Phase C
+  - reads pre-split `data/sft/train.jsonl` and `data/sft/val.jsonl`; no eval-slice logic needed
+  - each example padded to `seq_len=1024`; response trimmed from right if over budget; example skipped if prompt alone exceeds budget
+  - padding token: EOT = 50256 (token 0 is a real vocab token, must not be used)
+  - output per shard: paired `{split}_{idx:06d}_tokens.npy` + `{split}_{idx:06d}_mask.npy`, both shape `(N, 1024)` int32
+  - mask: 0 for prompt tokens, 1 for response tokens + EOT, 0 for padding
+  - default 1000 examples/shard → `data/shards_sft/`
 
 ### DPO corpus
 

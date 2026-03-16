@@ -86,11 +86,9 @@ Nothing needs to be transferred to reach a cloud training machine — `git clone
 - ✓ `scripts/data/make_lm_eval_sets.py` — 150K lines (14,850,000–15,000,000) → `data/eval/`
 - ✓ `scripts/data/tokenize_shards.py` — packs docs into 100M-token int32 shards; ~98/2 train/val split
 
-### SFT corpus
-- [TODO] implement `scripts/data/build_sft_data.py`
-  - downloads IndicAlign instruct split; produces train/val splits with prompt boundaries preserved
-- [TODO] implement `scripts/data/tokenize_sft_shards.py`
-  - tokenizes into shards; prompt/response boundary must be encoded per example (required for selective loss masking during training)
+### SFT corpus ✓ scripts complete
+- ✓ `scripts/data/build_sft_data.py` — streams ai4bharat/indic-align (Dolly_T + OpenAssistant_T + Anudesh); 30K examples; language distribution mirrors pretraining (55/18/7/13/7); disjoint row partitioning across language variants; swap-correction heuristic for Latin-script columns; global shuffle + 90/10 train/val split → `data/sft/`
+- ✓ `scripts/data/tokenize_sft_shards.py` — mgpt2 only; seq_len=1024; EOT padding (token 50256); 2D shards shape (N, 1024) int32; paired `_tokens.npy` + `_mask.npy` per shard (mask=0 prompt, mask=1 response+EOT) → `data/shards_sft/`
 
 ### DPO corpus
 - [TODO] implement `scripts/data/build_dpo_data.py`
@@ -183,6 +181,6 @@ After this step the machine is fully bootstrapped; run the data scripts as norma
 ## What to do next (recommended order)
 1) ~~Finish Phase A (final mgpt2 tokenizer + tokenizer_eval.json)~~ ✓ done
 2) ~~Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)~~ ✓ done
-3) Move to cloud GPU: `git clone` → `download_tokenizer_artifacts.py` → re-run data scripts
-4) Implement Phase C (pretraining) — scripts, eval, HellaSwag, report
-5) Implement Phase B SFT + DPO corpora (can be done in parallel with or after Phase C)
+3) ~~Implement Phase B SFT corpus (build_sft_data + tokenize_sft_shards)~~ ✓ done
+4) Implement Phase B DPO corpus (build_dpo_data + tokenize_dpo_shards) — can be done in parallel with or after Phase C
+5) Implement Phase C (pretraining) — scripts, eval, HellaSwag, report
