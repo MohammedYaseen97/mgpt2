@@ -43,13 +43,26 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
   - mask: 0 for prompt tokens, 1 for response tokens + EOT, 0 for padding
   - default 1000 examples/shard → `data/shards_sft/`
 
-### DPO corpus
+### DPO corpus ✓ build script complete
 
-- `build_dpo_data.py`
-  - reads IndicAlign toxic split; writes aligned chosen/rejected pair splits under `data/dpo/`
+- `build_dpo_data.py` ✓
+  - streams `ai4bharat/indic-align` configs `HHRLHF_T` (primary, 32.6K rows — real Anthropic HH-RLHF human prompts) and optionally `Toxic_Matrix` (supplementary, 90.3K rows — synthetic; opt-in via `--add-toxic-matrix`)
+  - language distribution mirrors pretraining weights: 55% `eng_Latn` / 18% `hin_Deva` / 13% `kan_Knda` / 7% `hin_Latn` / 7% `kan_Latn`
+  - **disjoint row partitioning**: same as SFT — each source row contributes to exactly one language slot
+  - swap-correction heuristic applied to `hin_Latn` + `kan_Latn` columns (eng_Latn length-ratio reference)
+  - **deferred rejected**: IndicAlign toxic configs only provide the chosen (safe refusal) side. `rejected` is written as `""` — must be populated by `generate_dpo_rejected.py` after Phase C before tokenization
+  - global shuffle (seed=42) + 90/10 positional train/val cut → `data/dpo/train.jsonl` (13,500), `data/dpo/val.jsonl` (1,499), `data/dpo/manifest.json`
+  - output fields per example: `{"prompt": "…", "chosen": "…", "rejected": "", "lang": "hin_Deva"}`
+  - actual run: 14,999 pairs (1 skip — empty column); HHRLHF_T alone sufficient, Toxic_Matrix not downloaded
 
-- `tokenize_dpo_shards.py`
-  - reads `data/dpo/`; writes shards under `data/shards_dpo/`; chosen/rejected alignment must be maintained across shards
+- `generate_dpo_rejected.py` — **[TODO]** runs Phase C pretrained model on each toxic prompt; fills `rejected` field in-place; updates `manifest.json` → `rejected_populated: true`
+
+- `tokenize_dpo_shards.py` — **[TODO]**
+  - asserts `rejected_populated=true` in manifest before starting
+  - **mgpt2 only** — same reasoning as SFT
+  - tokenizes paired prompt+chosen and prompt+rejected sequences; records `prompt_lens` per example
+  - output per shard: triple `{split}_{idx:06d}_chosen.npy` + `_rejected.npy` + `_prompt_lens.npy`, all shape `(N, 1024)` int32
+  - chosen/rejected alignment must be maintained — `chosen[i]`, `rejected[i]`, `prompt_lens[i]` always same prompt
 
 ---
 

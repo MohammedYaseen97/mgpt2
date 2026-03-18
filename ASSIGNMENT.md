@@ -90,11 +90,12 @@ Nothing needs to be transferred to reach a cloud training machine — `git clone
 - ✓ `scripts/data/build_sft_data.py` — streams ai4bharat/indic-align (Dolly_T + OpenAssistant_T + Anudesh); 30K examples; language distribution mirrors pretraining (55/18/7/13/7); disjoint row partitioning across language variants; swap-correction heuristic for Latin-script columns; global shuffle + 90/10 train/val split → `data/sft/`
 - ✓ `scripts/data/tokenize_sft_shards.py` — mgpt2 only; seq_len=1024; EOT padding (token 50256); 2D shards shape (N, 1024) int32; paired `_tokens.npy` + `_mask.npy` per shard (mask=0 prompt, mask=1 response+EOT) → `data/shards_sft/`
 
-### DPO corpus
-- [TODO] implement `scripts/data/build_dpo_data.py`
-  - downloads IndicAlign toxic split; produces aligned chosen/rejected pair splits with train/val held-out
+### DPO corpus ✓ build script complete
+- ✓ `scripts/data/build_dpo_data.py` — streams ai4bharat/indic-align (HHRLHF_T primary + Toxic_Matrix supplementary); 14,999 pairs; language distribution mirrors pretraining (55/18/13/7/7); disjoint row partitioning; swap-correction heuristic for Latin columns; global shuffle + 90/10 train/val split → `data/dpo/`
+  - **Deferred rejected**: both toxic configs only provide the chosen (safe refusal) side. The `rejected` field is written as `""` and populated later by `scripts/generate_dpo_rejected.py` after Phase C produces a checkpoint. `tokenize_dpo_shards.py` will assert `rejected_populated=true` in the manifest before proceeding.
+- [TODO] implement `scripts/generate_dpo_rejected.py` — runs Phase C pretrained model on each toxic prompt to generate the `rejected` completions; updates `data/dpo/manifest.json` flag
 - [TODO] implement `scripts/data/tokenize_dpo_shards.py`
-  - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards
+  - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards; must assert `rejected_populated=true` before running
 
 ### Checks
 - [TODO] implement `scripts/checks/check_shards.py`

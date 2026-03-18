@@ -365,16 +365,84 @@ Format: `{split}_{index:06d}_{array}.npy`
 
 ## DPO (IndicAlign Toxic)
 
-### Source
+### Source and composition
 
-HuggingFace dataset: `ai4bharat/IndicAlign`, toxic split.
+Two HuggingFace configs from `ai4bharat/indic-align`:
 
-`build_dpo_data.py` downloads this split, verifies chosen/rejected alignment
-per prompt, and writes:
+| Config | Rows | Prompt source | Response source | Role |
+|---|---|---|---|---|
+| `HHRLHF_T` | 32,669 | Anthropic HH-RLHF (real human-written) | Llama2-70B-Chat refusals, IndicTrans2 | Primary |
+| `Toxic_Matrix` | 90,352 | Mistral-7B-Instruct generated (synthetic) | Llama2-70B-Chat refusals, IndicTrans2 | Supplementary (opt-in) |
+
+**Target: 15,000 pairs total, language distribution mirrors pretraining weights.**
+
+| Language | Count | Ratio | Source config |
+|---|---|---|---|
+| `eng_Latn` | 8,250 | 55% | HHRLHF_T / Toxic_Matrix pool |
+| `hin_Deva` | 2,700 | 18% | pool partition A |
+| `kan_Knda` | 1,950 | 13% | pool partition B |
+| `hin_Latn` | 1,050 |  7% | pool partition C |
+| `kan_Latn` | 1,050 |  7% | pool partition D |
+
+Actual run parameters (from `data/dpo/manifest.json`):
+
+| Parameter | Value |
+|---|---|
+| total pairs | 14,999 (1 skipped — empty column) |
+| n_train | 13,500 |
+| n_val | 1,499 |
+| seed | 42 |
+| primary source | HHRLHF_T only (Toxic_Matrix not downloaded) |
+
+**Disjoint row partitioning:** same scheme as SFT. The combined pool is shuffled
+with a fixed seed and sliced into five non-overlapping partitions. Each source
+row contributes exactly ONE language column — the same content never appears in
+multiple scripts. Swap-correction heuristic applied to `hin_Latn` + `kan_Latn`
+columns using `eng_Latn` length-ratios as reference (same bug as SFT Dolly_T).
+
+`build_dpo_data.py` writes:
 - `data/dpo/train.jsonl` — training pairs
 - `data/dpo/val.jsonl`   — validation pairs
 
-Each JSONL line: `{"prompt": "…", "chosen": "…", "rejected": "…"}`.
+Each JSONL line: `{"prompt": "…", "chosen": "…", "rejected": "", "lang": "hin_Deva"}`.
+
+The `lang` field is included for per-language loss monitoring and eval bucketing,
+consistent with the SFT JSONL format.
+
+### Deferred rejected strategy
+
+Both toxic configs only provide the **chosen** (safe refusal) side. The
+**rejected** response — what the model should move away from — must come from
+running the Phase C pretrained model on each toxic prompt. This is deferred DPO:
+
+```
+Phase B  build_dpo_data.py         writes chosen side, rejected = ""
+Phase E  generate_dpo_rejected.py  fills rejected using Phase C model outputs
+Phase B  tokenize_dpo_shards.py    tokenises once rejected is populated
+```
+
+The manifest records `"rejected_populated": false` as an explicit guard.
+`tokenize_dpo_shards.py` **must** assert this flag is `true` before starting.
+
+### Raw data manifest
+
+`data/dpo/manifest.json`:
+
+```json
+{
+  "sources":            { "primary": "ai4bharat/indic-align / HHRLHF_T" },
+  "seed":               42,
+  "total":              14999,
+  "n_train":            13500,
+  "n_val":              1499,
+  "val_ratio":          0.1,
+  "n_skipped":          1,
+  "lang_counts":        { "eng_Latn": 8249, "hin_Deva": 2700, "kan_Knda": 1950, "hin_Latn": 1050, "kan_Latn": 1050 },
+  "lang_slots":         { "eng_Latn": 8250, "hin_Deva": 2700, "kan_Knda": 1950, "hin_Latn": 1050, "kan_Latn": 1050 },
+  "rejected_populated": false,
+  "rejected_source":    "deferred — run scripts/generate_dpo_rejected.py after Phase C"
+}
+```
 
 ### Train / val split
 
