@@ -78,7 +78,6 @@ Build all raw corpora and tokenized shards needed across pretraining, SFT, and D
 All data work lives here; downstream training phases consume these outputs and add nothing to `scripts/data/`.
 
 **Reproducibility note:** every corpus in this phase is fully reproducible from its script + manifest.
-Nothing needs to be transferred to reach a cloud training machine — `git clone` the repo and re-run.
 
 ### Pretraining corpus ✓ scripts complete
 - ✓ `scripts/data/build_corpus_mixture.py` — 15M docs, globally shuffled → `data/raw/corpus_mixture.txt`
@@ -156,26 +155,6 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 ### Model (you will implement)
 - [TODO] implement `scripts/publish_model_hf.py`
   - either a minimal Transformers wrapper (`trust_remote_code=True`) or a documented state_dict release
-
----
-
-## Cloud setup (bootstrapping a new machine)
-
-All data is reproducible from public HF datasets + scripts. Only the tokenizer artifact
-(`mgpt2.model`) is unique. It lives in the published HF tokenizer repo and can be restored with:
-
-```bash
-git clone <repo>
-pip install -r requirements.txt
-export HF_TOKEN=<your_token>
-python scripts/download_tokenizer_artifacts.py --repo_id ace-1/mgpt2-tokenizer
-```
-
-`scripts/download_tokenizer_artifacts.py` fetches the canonical HF filenames
-(`tokenizer.model`, `tokenizer.vocab`, `evaluation.json`, `heldout_eval.txt`) and places them
-in `tokenizer/artifacts/` under their local names (`mgpt2.model`, `mgpt2.vocab`,
-`tokenizer_eval.json`, `heldout_eval.txt`) — exactly as they appear in the local repo.
-After this step the machine is fully bootstrapped; run the data scripts as normal.
 
 ---
 
