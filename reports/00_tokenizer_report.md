@@ -16,7 +16,7 @@ Train a BPE tokenizer with the same vocabulary structure as GPT-2 (256 bytes + 5
 | `tokenizer/artifacts/heldout_eval.txt` | `57b44c6a79cc52890f8cb36a28223f44491fc85e9b546417bc08dff42bd699a2` |
 | `tokenizer/artifacts/tokenizer_eval.json` | (regenerate with eval command below) |
 
-Git commit at time of training: `eac6dd98c40af3cdde393706e823d4b2e409248e`
+Git commit at time of training: `eac6dd9` (Mar 1 — trained on synthetic corpus; retrain on verified corpus pending on cloud)
 
 ---
 
@@ -24,34 +24,34 @@ Git commit at time of training: `eac6dd98c40af3cdde393706e823d4b2e409248e`
 
 **Build tokenizer training corpus** (500K docs, same mixture as pretraining):
 ```bash
-virtual/bin/python scripts/data/build_corpus_mixture.py \
-  --limit 500000 \
-  --buffer-size 10000 \
+python scripts/data/build_corpus_mixture.py \
+  --limit 500_000 \
   --output-file tokenizer/tok_corpus_large.txt
 ```
 
 **Create held-out set** (before training, leak-free protocol):
 ```bash
-virtual/bin/python -m tokenizer.scripts.make_heldout \
+python -m tokenizer.scripts.make_heldout \
   --corpus tokenizer/tok_corpus_large.txt \
-  --out tokenizer/artifacts/heldout_eval.txt
+  --out tokenizer/artifacts/heldout_eval.txt \
+  --n 10000 --seed 1337
 ```
 
 **Train tokenizer**:
 ```bash
-virtual/bin/python -m tokenizer.train_tokenizer \
+python -m tokenizer.train_tokenizer \
   --corpus tokenizer/tok_corpus_large.txt \
   --exclude_lines_file tokenizer/artifacts/heldout_eval.txt \
   --num_merges 50000 \
-  --sample_lines 100000 \
+  --sample_lines 100_000 \
   --min_chunk_freq 5 \
-  --max_chunks 200000 \
+  --max_chunks 200_000 \
   --out_prefix tokenizer/artifacts/mgpt2
 ```
 
 **Evaluate**:
 ```bash
-virtual/bin/python -m tokenizer.scripts.evaluate \
+python -m tokenizer.scripts.evaluate \
   --text tokenizer/artifacts/heldout_eval.txt \
   --limit 10000 \
   --model tokenizer/artifacts/mgpt2.model > tokenizer/artifacts/tokenizer_eval.json
