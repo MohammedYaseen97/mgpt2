@@ -52,18 +52,22 @@ def compute_perplexity(model: GPT, token_batches: list[torch.Tensor], device: st
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--heldout_text", required=True)
-    ap.add_argument("--device", default="cuda")
-    ap.add_argument("--out", required=True, help="Output JSON path.")
+    ap.add_argument("--checkpoint",     required=True)
+    ap.add_argument("--eval-manifest",  required=True,
+                    help="Path to data/eval/manifest.json (bucketed heldout sets)")
+    ap.add_argument("--tokenizer-kind", default="gpt2", choices=["gpt2", "mgpt2"])
+    ap.add_argument("--tokenizer-model",default="tokenizer/artifacts/mgpt2.model")
+    ap.add_argument("--device",         default="cuda")
+    ap.add_argument("--out",            required=True, help="Output JSON path.")
     args = ap.parse_args()
 
-    # TODO: tokenize heldout_text appropriately for the model/tokenizer under evaluation.
-    # For fair comparisons, you will run this script once per model/tokenizer pair.
-    heldout_lines = [ln.rstrip("\n") for ln in Path(args.heldout_text).read_text(encoding="utf-8").splitlines() if ln.strip()]
+    # Load bucketed heldout files from manifest
+    manifest = json.loads(Path(args.eval_manifest).read_text(encoding="utf-8"))
     buckets: dict[str, list[str]] = {}
-    for s in heldout_lines:
-        buckets.setdefault(bucket(s), []).append(s)
+    for bucket_name, info in manifest["buckets"].items():
+        lines = [ln.rstrip("\n") for ln in
+                 Path(info["file"]).read_text(encoding="utf-8").splitlines() if ln.strip()]
+        buckets[bucket_name] = lines
 
     _ = buckets  # TODO: remove when implemented
 

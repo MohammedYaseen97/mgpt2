@@ -28,6 +28,7 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+PYTHON    = str(REPO_ROOT / "virtual" / "bin" / "python")
 
 # maps config tokenizer kind strings → train.py --tokenizer-kind choices
 _KIND_MAP = {
@@ -190,22 +191,28 @@ def _post_process(run_dir: Path) -> None:
 
 
 def _try_lm_eval(run_dir: Path, config: dict) -> str:
-    """Run eval/lm_eval.py if heldout text exists. Gracefully skips otherwise."""
-    heldout = config.get("eval", {}).get("heldout_text")
-    if not heldout or not (REPO_ROOT / heldout).exists():
-        return "skipped — heldout_text not found"
+    """Run eval/lm_eval.py against the bucketed eval manifest. Skips gracefully if absent."""
+    eval_manifest = config.get("eval", {}).get("eval_manifest")
+    if not eval_manifest or not (REPO_ROOT / eval_manifest).exists():
+        return "skipped — eval_manifest not found"
 
     ckpts = sorted(run_dir.glob("model_*.pt"))
     if not ckpts:
         return "skipped — no checkpoint found"
 
+    tok      = config.get("tokenizer", {})
+    tok_args = ["--tokenizer-kind", _KIND_MAP.get(tok.get("kind", "gpt2"), "gpt2")]
+    if tok.get("model_file"):
+        tok_args += ["--tokenizer-model", tok["model_file"]]
+
     try:
         subprocess.check_call([
-            sys.executable, "-m", "eval.lm_eval",
-            "--checkpoint",   str(ckpts[-1]),
-            "--heldout_text", str(REPO_ROOT / heldout),
-            "--device",       "cuda",
-            "--out",          str(run_dir / "lm_eval.json"),
+            PYTHON, "-m", "eval.lm_eval",
+            "--checkpoint",    str(ckpts[-1]),
+            "--eval-manifest", str(REPO_ROOT / eval_manifest),
+            "--device",        "cuda",
+            "--out",           str(run_dir / "lm_eval.json"),
+            *tok_args,
         ], cwd=REPO_ROOT)
         return "complete"
     except subprocess.CalledProcessError:

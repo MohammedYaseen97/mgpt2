@@ -26,5 +26,4 @@ train:
   hellaswag_max_examples: 64 # enough to verify the eval path, not enough to be slow
 
 eval:
-  heldout_text: data/eval/heldout_lm.txt   # skipped gracefully if absent
-  bucketed: true
+  eval_manifest: data/eval/manifest.json   # bucketed heldout sets (latin/deva/knda/mixed)

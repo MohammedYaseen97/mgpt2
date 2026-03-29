@@ -27,6 +27,5 @@ train:
   eval_interval: 250
 
 eval:
-  heldout_text: data/eval/heldout_lm.txt   # TODO
-  bucketed: true
+  eval_manifest: data/eval/manifest.json   # bucketed heldout sets (latin/deva/knda/mixed)
 
