@@ -1,0 +1,32 @@
+# Smoke-test config — mgpt2 (custom regex BPE tokenizer)
+# Identical to pretrain_mgpt2.yaml but with tiny step counts.
+# Use to verify the full run_pretrain → train.py pipeline end-to-end
+# before committing to the 19k-step production run.
+
+name: mgpt2_custom_tokenizer_smoke
+
+tokenizer:
+  kind: mgpt2_regex_bpe
+  model_file: tokenizer/artifacts/mgpt2.model  # must exist before running
+  vocab_size: 50257
+  vocab_padded: 50304
+
+data:
+  shards_dir: data/shards_mgpt2   # must exist before running
+
+train:
+  seed: 1337
+  block_size: 1024
+  total_batch_size: 16384    # grad_accum_steps = 16384 / (4*1024) = 4
+  micro_batch_size: 4
+  max_steps: 20
+  warmup_steps: 2
+  max_lr: 0.003
+  min_lr_ratio: 0.1
+  weight_decay: 0.1
+  eval_interval: 5
+  hellaswag_max_examples: 64 # enough to verify the eval path, not enough to be slow
+
+eval:
+  heldout_text: data/eval/heldout_lm.txt   # skipped gracefully if absent
+  bucketed: true

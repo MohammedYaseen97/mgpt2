@@ -5,6 +5,32 @@ import os
 import numpy as np
 from model import GPT, GPTConfig
 
+import argparse
+
+## ------------------------------------------------------------
+## Command line arguments
+## ------------------------------------------------------------
+parser = argparse.ArgumentParser()
+parser.add_argument("--shards-dir",        default="data/shards_gpt2")
+parser.add_argument("--seed",              type=int,   default=1337)
+parser.add_argument("--total-batch-size",  type=int,   default=524288)
+parser.add_argument("--micro-batch-size",  type=int,   default=16)
+parser.add_argument("--max-lr",            type=float, default=3e-3)
+parser.add_argument("--min-lr-ratio",      type=float, default=0.1)
+parser.add_argument("--warmup-steps",      type=int,   default=715)
+parser.add_argument("--max-steps",         type=int,   default=19073)
+parser.add_argument("--weight-decay",      type=float, default=0.1)
+parser.add_argument("--eval-interval",          type=int,   default=250)
+parser.add_argument("--hellaswag-max-examples", type=int,   default=0,
+                    help="Cap HellaSwag examples per eval (0 = all 10042)")
+parser.add_argument("--log-dir",           default="logs/pretrain")
+parser.add_argument("--tokenizer-kind",    default="gpt2",  choices=["gpt2", "mgpt2"])
+parser.add_argument("--tokenizer-model",   default="tokenizer/artifacts/mgpt2.model")
+args = parser.parse_args()
+
+## ------------------------------------------------------------
+## Data loading
+## ------------------------------------------------------------
 def load_tokens(filename):
     npt = np.load(filename)
     npt = npt.astype(np.int32) # added after video
@@ -20,7 +46,7 @@ class DataLoaderLite:
         assert split in {'train', 'val'}
         
         #get the shard filename
-        data_root = "edu_fineweb10B"
+        data_root = args.shards_dir
         shards = os.listdir(data_root)
         shards = [s for s in shards if split in s]
         shards = sorted(shards)
@@ -117,20 +143,31 @@ else:
 
 device_type = "cuda" if device.startswith("cuda") else "cpu"
 
-torch.manual_seed(1337)
+torch.manual_seed(args.seed)
 if torch.cuda.is_available():
-    torch.cuda.manual_seed(1337)
+    torch.cuda.manual_seed(args.seed)
 
-total_batch_size = 524288 # ~0.5M tokens
-B=16 # micro batch size
-T=1024 # sequence length
+total_batch_size = args.total_batch_size
+B = args.micro_batch_size
+T = 1024  # block size — architecture constant
 assert total_batch_size % (B * T * ddp_world_size) == 0, f"total_batch_size must be divisible by B * T * ddp_world_size"
 grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
 if master_process:
     print(f"total desired batch size: {total_batch_size}")
     print(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
 
-enc = tiktoken.get_encoding('gpt2')
+import types as _types
+if args.tokenizer_kind == "gpt2":
+    _e  = tiktoken.get_encoding("gpt2")
+    enc = _types.SimpleNamespace(encode=_e.encode, decode=_e.decode)
+else:
+    from tokenizer.regex_tokenizer import RegexTokenizer as _RT
+    _tok = _RT()
+    _tok.load(args.tokenizer_model)
+    enc = _types.SimpleNamespace(
+        encode=lambda t: _tok.encode(t, allowed_special=set()),
+        decode=_tok.decode,
+    )
 train_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split='train')
 val_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split='val')
 
@@ -146,10 +183,10 @@ if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 raw_model = model.module if ddp else model # always contains the "raw" unwrapped model
 
-max_lr = 6e-4 * 5 # increasing the learning rate by 5x since it is a very conservative estimate
-min_lr = max_lr * 0.1
-warmup_steps = 715
-max_steps = 19073
+max_lr       = args.max_lr
+min_lr       = max_lr * args.min_lr_ratio
+warmup_steps = args.warmup_steps
+max_steps    = args.max_steps
 def get_lr(it):
     # 1. linear warmup for warmup_steps
     if it < warmup_steps:
@@ -164,10 +201,10 @@ def get_lr(it):
     return min_lr + coeff * (max_lr - min_lr)
 
 # optimize!
-optimizer = raw_model.configure_optimizers(weight_decay=0.1, learning_rate=6e-4, device_type=device_type)
+optimizer = raw_model.configure_optimizers(weight_decay=args.weight_decay, learning_rate=max_lr, device_type=device_type)
 
 # create the log directory we will create checkpoints to and log to
-log_dir = "logs"
+log_dir = args.log_dir
 os.makedirs(log_dir, exist_ok=True)
 log_file = os.path.join(log_dir, "log.txt")
 with open(log_file, "w") as f: # open for writing to clear the file
@@ -178,7 +215,7 @@ for step in range(max_steps):
     last_step = (step == max_steps - 1)
     
     # once in a while, run validation loop
-    if step % 250 == 0 or last_step:
+    if step % args.eval_interval == 0 or last_step:
         model.eval()
         val_loader.reset()
         with torch.no_grad():
@@ -212,15 +249,19 @@ for step in range(max_steps):
                     torch.save(checkpoint, checkpoint_path)
     
     # once in a while, evaluate HellaSwag
-    if (step % 250 == 0 or last_step) and (not use_compile):
+    # render_example receives enc so token IDs always match this model's vocab
+    if (step % args.eval_interval == 0 or last_step) and (not use_compile):
         num_correct_norm = 0
         num_total = 0
+        hella_cap = args.hellaswag_max_examples or 10_042
         for i, example in enumerate(iterate_examples("val")):
+            if i >= hella_cap:
+                break
             # only process examples where i % ddp_world_size == ddp_rank
             if i % ddp_world_size != ddp_rank:
                 continue
             # render the example into tokens and labels
-            _, tokens, mask, label = render_example(example)
+            _, tokens, mask, label = render_example(example, enc=enc)
             tokens = tokens.to(device)
             mask = mask.to(device)
             # get the logits
@@ -245,7 +286,7 @@ for step in range(max_steps):
                 f.write(f"{step} hella {acc_norm:.4f}\n")
     
     # once in a while, generate from the model
-    if ((step > 0 and step % 250 == 0) or last_step) and (not use_compile):
+    if ((step > 0 and step % args.eval_interval == 0) or last_step) and (not use_compile):
         model.eval()
         num_return_sequences = 4 # Batch size: B
         max_length = 32 # Sequence length: T

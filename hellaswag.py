@@ -59,7 +59,7 @@ hellaswags = {
     "test": "https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_test.jsonl",
 }
 
-enc = tiktoken.get_encoding("gpt2")
+_default_enc = tiktoken.get_encoding("gpt2")
 
 def download(split):
     """Downloads HellaSwag DATA_CACHE_DIR"""
@@ -70,13 +70,18 @@ def download(split):
         print(f"Downloading {data_url} to {data_filename}...")
         download_file(data_url, data_filename)
 
-def render_example(example):
+def render_example(example, enc=None):
     """
     Given the example as a dictionary, render it as three torch tensors:
     - tokens (the tokens of context + completion, of size 4xN, as there are always 4 candidates)
     - mask (is 1 in the region of the candidate completion, where we evaluate likelihoods)
     - label (the index of the correct completion, which we hope has the highest likelihood)
+
+    enc: any object with an .encode(str) method.  Defaults to tiktoken gpt2.
+         Pass the model's own tokenizer so token IDs map to the right embeddings.
     """
+    if enc is None:
+        enc = _default_enc
     ctx = example["ctx"]
     label = example["label"]
     endings = example["endings"]

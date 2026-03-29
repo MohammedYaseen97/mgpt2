@@ -16,13 +16,15 @@ data:
 train:
   seed: 1337
   block_size: 1024
-  total_batch_size: 524288
+  total_batch_size: 524288   # effective gradient-step size (tokens)
   micro_batch_size: 16
-  max_steps: 19073
+  # max_steps is intentionally absent — run_pretrain.py derives it from
+  # data/shards_gpt2/manifest.json: total_tokens // total_batch_size  (1 epoch)
   warmup_steps: 715
   max_lr: 0.003
   min_lr_ratio: 0.1
   weight_decay: 0.1
+  eval_interval: 250
 
 eval:
   heldout_text: data/eval/heldout_lm.txt   # TODO
