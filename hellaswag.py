@@ -61,6 +61,21 @@ hellaswags = {
 
 _default_enc = tiktoken.get_encoding("gpt2")
 
+
+def get_most_likely_row(tokens, mask, logits):
+    """Return the index of the completion with the lowest avg loss over masked positions."""
+    shift_logits = (logits[..., :-1, :]).contiguous()
+    shift_tokens = (tokens[..., 1:]).contiguous()
+    flat_losses  = F.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_tokens.view(-1), reduction="none",
+    ).view(tokens.size(0), -1)
+    shift_mask          = (mask[..., 1:]).contiguous()
+    masked_shift_losses = flat_losses * shift_mask
+    avg_loss = masked_shift_losses.sum(dim=1) / shift_mask.sum(dim=1)
+    return avg_loss.argmin().item()
+
+
 def download(split):
     """Downloads HellaSwag DATA_CACHE_DIR"""
     os.makedirs(DATA_CACHE_DIR, exist_ok=True)

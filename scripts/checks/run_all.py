@@ -52,14 +52,22 @@ def main() -> None:
         failures.append("Phase B: shard check failed")
 
     # ------------------------------------------------------------------
-    # Phase C / D / E — TODO
+    # Phase C — pretrain run
+    # ------------------------------------------------------------------
+    if not run(
+        [sys.executable, "-m", "scripts.checks.check_pretrain_run"],
+        label="Phase C — pretrain run",
+    ):
+        failures.append("Phase C: pretrain run check failed")
+
+    # ------------------------------------------------------------------
+    # Phase D / E — TODO
     # ------------------------------------------------------------------
     print(f"\n{'=' * 60}")
-    print("  Phase C / D / E checks — TODO")
+    print("  Phase D / E checks — TODO")
     print(f"{'=' * 60}")
-    print("  SKIP  implement scripts/checks/check_pretrain_run.py  (Phase C)")
-    print("  SKIP  implement eval/sft_eval.py                       (Phase D)")
-    print("  SKIP  implement eval/dpo_eval.py                       (Phase E)")
+    print("  SKIP  implement eval/sft_eval.py   (Phase D)")
+    print("  SKIP  implement eval/dpo_eval.py   (Phase E)")
 
     # ------------------------------------------------------------------
     # Summary

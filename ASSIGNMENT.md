@@ -102,7 +102,7 @@ All data work lives here; downstream training phases consume these outputs and a
 
 ---
 
-## Phase C — Pretraining (baseline vs mgpt2)
+## Phase C — Pretraining (baseline vs mgpt2) ✓ scripts complete
 
 ### Goal
 Train two models under controlled conditions:
@@ -111,20 +111,17 @@ Train two models under controlled conditions:
 
 The HF GPT-2 model is a contextual reference only (different training data); it must be labelled as non-controlled if reported.
 
-### Your tasks (TODO)
-- [TODO] implement `scripts/run_pretrain.py`
-  - uses `train.py` as the baseline engine, parameterized via config; `--tokenizer [gpt2|mgpt2]`
-- [TODO] implement `eval/lm_eval.py`
-  - perplexity overall + bucketed perplexity on fixed heldout sets
-- [TODO] implement `eval/hellaswag_eval.py`
-  - HellaSwag score for both models; `hellaswag.py` is already scaffolded
+### Your tasks
+- ✓ `scripts/run_pretrain.py` — orchestrates training via `train.py`; YAML config driven; records git hash, tokenizer SHA-256, derives max_steps from shard manifest
+- ✓ `eval/lm_eval.py` — streaming perplexity overall + bucketed (latin/deva/knda/mixed); memory-efficient rolling-buffer tokenization
+- ✓ `eval/hellaswag_eval.py` — full 10,042-example HellaSwag for both models using each model's own tokenizer; JSON output with metadata
 - [TODO] write `reports/01_pretrain_report.md`
 
 ### Checks
-- [TODO] `scripts/checks/check_pretrain_run.py` verifies:
+- ✓ `scripts/checks/check_pretrain_run.py` verifies:
   - token budget equality across both runs
-  - comparable hyperparams
-  - metrics exist and are bucketed
+  - comparable hyperparams (seed, lr, weight decay, warmup fraction, block size)
+  - artifacts exist (final_metrics.json, log.txt, checkpoint)
   - HellaSwag scores present for both models
 
 ---
@@ -163,4 +160,6 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 2) ~~Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)~~ ✓ done
 3) ~~Implement Phase B SFT corpus (build_sft_data + tokenize_sft_shards)~~ ✓ done
 4) Implement Phase B DPO corpus (build_dpo_data + tokenize_dpo_shards) — can be done in parallel with or after Phase C
-5) Implement Phase C (pretraining) — scripts, eval, HellaSwag, report
+5) ~~Implement Phase C scripts + eval (run_pretrain, lm_eval, hellaswag_eval, checks)~~ ✓ done
+6) Run full Phase C training (baseline + mgpt2); write `reports/01_pretrain_report.md`
+7) Implement Phase D (SFT) — `scripts/run_sft.py`, `eval/sft_eval.py`, report

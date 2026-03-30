@@ -206,11 +206,13 @@ def _try_lm_eval(run_dir: Path, config: dict) -> str:
         tok_args += ["--tokenizer-model", tok["model_file"]]
 
     try:
+        lm_max_lines = str(config.get("eval", {}).get("lm_max_lines", 0))
         subprocess.check_call([
             PYTHON, "-m", "eval.lm_eval",
             "--checkpoint",    str(ckpts[-1]),
             "--eval-manifest", str(REPO_ROOT / eval_manifest),
             "--device",        "cuda",
+            "--max-lines",     lm_max_lines,
             "--out",           str(run_dir / "lm_eval.json"),
             *tok_args,
         ], cwd=REPO_ROOT)
