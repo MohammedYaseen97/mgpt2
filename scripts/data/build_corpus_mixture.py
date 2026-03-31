@@ -40,7 +40,7 @@ from typing import Any, Iterable
 
 import pyarrow
 
-from datasets import interleave_datasets, load_dataset
+from datasets import Value, interleave_datasets, load_dataset
 from tqdm import tqdm
 
 # ---------------------------------------------------------------------------
@@ -165,14 +165,22 @@ def _safe_close(iterator: Any) -> None:
 
 
 def _load_stream(key: str) -> Any:
-    """Load a single streaming dataset by its registry key."""
+    """Load a single streaming dataset by its registry key.
+
+    All streams are normalised to a common ``{'text': Value('string')}`` schema
+    so that ``interleave_datasets`` can align features across sources that may
+    use ``large_string`` or carry different extra columns (e.g. Sangraha's
+    ``doc_id`` / ``type`` vs FineWeb's columns).
+    """
     cfg = DATASETS[key]
     kwargs: dict[str, Any] = {"split": "train", "streaming": True}
     if "name" in cfg:
         kwargs["name"] = cfg["name"]
     if "data_dir" in cfg:
         kwargs["data_dir"] = cfg["data_dir"]
-    return load_dataset(cfg["path"], **kwargs)
+    ds = load_dataset(cfg["path"], **kwargs)
+    ds = ds.select_columns(["text"]).cast_column("text", Value("string"))
+    return ds
 
 
 def _iter_mixed_stream(

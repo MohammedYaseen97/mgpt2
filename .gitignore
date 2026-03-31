@@ -12,6 +12,7 @@
 *.model
 *.vocab
 /tokenizer/artifacts
+/tokenizer/manifest.json
 PROJECT_SCAFFOLD_TEMPLATE.md
 /data
 /runs
