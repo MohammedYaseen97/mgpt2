@@ -149,9 +149,10 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 ### Tokenizer (already scaffolded)
 - `tokenizer/scripts/publish_hf.py` can publish trained + evaluated tokenizer.
 
-### Model (you will implement)
-- [TODO] implement `scripts/publish_model_hf.py`
-  - either a minimal Transformers wrapper (`trust_remote_code=True`) or a documented state_dict release
+### Model
+- ✓ `scripts/publish_model_hf.py` — publishes any of the 3 stages (pretrain / sft / dpo) as a separate HF repo
+  - pushes checkpoint (`pytorch_model.pt`), `model.py`, `config.json`, tokenizer files (mgpt2 only), README model card
+  - auto-discovers latest run dir for the given stage; accepts `--dry-run` for inspection before upload
 
 ---
 
