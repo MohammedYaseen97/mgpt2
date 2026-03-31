@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
 aiohappyeyeballs
 aiohttp
 aiosignal
@@ -69,7 +70,7 @@ stack-data
 sympy
 tiktoken
 tokenizers
-torch
+torch==2.10.0+cu128
 tornado
 tqdm
 traitlets

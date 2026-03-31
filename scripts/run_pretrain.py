@@ -20,6 +20,7 @@ import argparse
 import datetime
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -151,7 +152,13 @@ def _build_cmd(config: dict, run_dir: Path, nproc: int) -> list[str]:
     train_py = [str(REPO_ROOT / "train.py")] + train_args
 
     if nproc > 1:
-        return ["torchrun", "--standalone", f"--nproc_per_node={nproc}"] + train_py
+        return [
+            "torchrun",
+            f"--nproc_per_node={nproc}",
+            "--rdzv-backend=c10d",
+            "--rdzv-endpoint=127.0.0.1:29500",
+            "--rdzv-id=pretrain",
+        ] + train_py
     return [sys.executable] + train_py
 
 
@@ -234,7 +241,10 @@ def main() -> None:
     cmd = _build_cmd(config, run_dir, args.nproc)
     print("+", " ".join(cmd))
 
-    result = subprocess.run(cmd, cwd=REPO_ROOT)
+    env = os.environ.copy()
+    env.setdefault("MASTER_ADDR", "127.0.0.1")
+    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    result = subprocess.run(cmd, cwd=REPO_ROOT, env=env)
 
     _post_process(run_dir)
 
