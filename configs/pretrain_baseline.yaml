@@ -17,7 +17,7 @@ train:
   seed: 1337
   block_size: 1024
   total_batch_size: 524288   # effective gradient-step size (tokens)
-  micro_batch_size: 64       # H100 80GB — grad_accum_steps = 524288 / (64*1024) = 8
+  micro_batch_size: 16       # 4xL4 24GB — grad_accum_steps = 524288 / (16*1024*4) = 8
   # max_steps is FIXED here so both runs see the same token budget (fair comparison).
   # mgpt2 shards: 14,438,211,234 tokens → 27,538 steps (1 full epoch).
   # gpt2 shards:  31,864,557,355 tokens → would be 60,776 steps (1 epoch) if unset.

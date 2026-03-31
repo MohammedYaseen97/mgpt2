@@ -15,7 +15,7 @@ train:
   seed: 1337
   block_size: 1024
   total_batch_size: 524288   # effective gradient-step size (tokens)
-  micro_batch_size: 64       # H100 80GB — grad_accum_steps = 524288 / (64*1024) = 8
+  micro_batch_size: 16       # 4xL4 24GB — grad_accum_steps = 524288 / (16*1024*4) = 8
   # max_steps is intentionally absent — run_pretrain.py derives it from
   # data/shards_mgpt2/manifest.json: total_tokens // total_batch_size  (1 epoch = 27,538 steps)
   warmup_steps: 715
