@@ -10,8 +10,8 @@ tokenizer:
   vocab_padded: 50304
 
 data:
-  shards_dir: data/shards_gpt2   # TODO: you will generate this
-  shard_prefix: null            # TODO: set if needed
+  shards_dir: data/shards_gpt2
+  shard_prefix: null
 
 train:
   seed: 1337

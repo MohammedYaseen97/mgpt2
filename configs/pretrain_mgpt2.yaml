@@ -4,12 +4,12 @@ name: mgpt2_custom_tokenizer
 
 tokenizer:
   kind: mgpt2_regex_bpe
-  model_file: tokenizer/artifacts/mgpt2.model  # TODO: train this
+  model_file: tokenizer/artifacts/mgpt2.model
   vocab_size: 50257
   vocab_padded: 50304
 
 data:
-  shards_dir: data/shards_mgpt2  # TODO: generate
+  shards_dir: data/shards_mgpt2
 
 train:
   seed: 1337
