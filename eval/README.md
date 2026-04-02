@@ -33,15 +33,17 @@ labelled explicitly as non-controlled in any report:
 - `buckets.py`
   - shared script-detection logic; classifies lines into latin/devanagari/kannada/mixed buckets
 
-- `lm_eval.py`
-  - [TODO] perplexity overall + bucketed on fixed heldout sets; reads `data/shards_*/` and tokenizer choice
+- `lm_eval.py` ✓
+  - streaming perplexity overall + bucketed (latin/deva/knda/mixed) on fixed heldout sets
+  - memory-efficient rolling-buffer tokenization; reads `data/eval/manifest.json`
 
-- `hellaswag_eval.py`
-  - [TODO] HellaSwag score for a trained model checkpoint; `hellaswag.py` in repo root is already scaffolded
-  - run for both controlled models (GPT-2-tokenized and mgpt2-tokenized); optionally compare vs HF GPT-2 (contextual, label explicitly)
+- `hellaswag_eval.py` ✓
+  - full 10,042-example HellaSwag for a trained model checkpoint using its own tokenizer
+  - run for both controlled models (GPT-2-tokenized and mgpt2-tokenized); optional `--hf-reference` flag for contextual HF GPT-2 comparison (must be labelled non-controlled)
 
-- `sft_eval.py`
-  - [TODO] held-out SFT loss + fixed prompt suite with saved generations
+- `sft_eval.py` ✓
+  - full val masked loss (all val examples, properly weighted per response token)
+  - fixed 10-prompt multilingual generation suite (2 prompts × 5 language variants: eng_Latn, hin_Deva, hin_Latn, kan_Knda, kan_Latn)
 
 - `dpo_eval.py`
   - [TODO] preference win-rate/accuracy on held-out pairs + SFT loss regression check

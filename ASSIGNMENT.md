@@ -97,8 +97,7 @@ All data work lives here; downstream training phases consume these outputs and a
   - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards; must assert `rejected_populated=true` before running
 
 ### Checks
-- [TODO] implement `scripts/checks/check_shards.py`
-  - verifies dtype, token ranges, shard sizes, document parity across tokenizers
+- ✓ `scripts/checks/check_shards.py` — verifies dtype, token ranges, shard sizes, document parity across tokenizers; skips DPO shards (deferred)
 
 ---
 
@@ -126,12 +125,15 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 
 ---
 
-## Phase D — SFT (IndicAlign Instruct)
+## Phase D — SFT (IndicAlign Instruct) ✓ scripts complete
 
-### Your tasks (TODO)
-- [TODO] implement `scripts/run_sft.py`
-- [TODO] implement `eval/sft_eval.py` (heldout loss + fixed prompt suite)
-- [TODO] write `reports/02_sft_report.md`
+### Your tasks
+- ✓ `scripts/run_sft.py` — orchestrates SFT via `train_sft.py`; YAML config driven; records git hash, pretrained checkpoint SHA-256, hyperparams; auto-discovers Phase C checkpoint
+- ✓ `train_sft.py` — masked CE loss (response tokens only); cosine LR schedule; epoch-based training; checkpoints at epoch boundaries + final step
+- ✓ `eval/sft_eval.py` — full val masked loss (all val examples, properly weighted) + fixed 10-prompt multilingual generation suite (2 prompts × 5 language variants); JSON output
+- ✓ `configs/sft_mgpt2.yaml` — production config (H100: batch_size=64, micro_batch_size=8, epochs=3, max_lr=3e-4)
+- ✓ `configs/sft_mgpt2_smoke.yaml` — smoke config verified end-to-end
+- [TODO] run full Phase D training (after Phase C production run); write `reports/02_sft_report.md`
 
 ---
 
@@ -160,7 +162,9 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 1) ~~Finish Phase A (final mgpt2 tokenizer + tokenizer_eval.json)~~ ✓ done
 2) ~~Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)~~ ✓ done
 3) ~~Implement Phase B SFT corpus (build_sft_data + tokenize_sft_shards)~~ ✓ done
-4) Implement Phase B DPO corpus (build_dpo_data + tokenize_dpo_shards) — can be done in parallel with or after Phase C
+4) Implement Phase B DPO corpus (generate_dpo_rejected + tokenize_dpo_shards) — after Phase C produces a checkpoint
 5) ~~Implement Phase C scripts + eval (run_pretrain, lm_eval, hellaswag_eval, checks)~~ ✓ done
-6) Run full Phase C training (baseline + mgpt2); write `reports/01_pretrain_report.md`
-7) Implement Phase D (SFT) — `scripts/run_sft.py`, `eval/sft_eval.py`, report
+6) Run full Phase C training on H100 (baseline + mgpt2); write `reports/01_pretrain_report.md`
+7) ~~Implement Phase D scripts (run_sft, train_sft, sft_eval, configs)~~ ✓ done
+8) Run full Phase D SFT training on H100 (after Phase C); write `reports/02_sft_report.md`
+9) Implement Phase E (DPO) — `scripts/run_dpo.py`, `eval/dpo_eval.py`, report
