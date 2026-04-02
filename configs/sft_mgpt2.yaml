@@ -1,0 +1,29 @@
+# SFT config — fine-tunes the Phase C mgpt2 pretrained checkpoint
+# on IndicAlign instruct shards (data/shards_sft/).
+#
+# Controlled baseline for Phase D is the same Phase C checkpoint,
+# untuned (i.e. no SFT).
+
+name: mgpt2
+
+model:
+  pretrained_checkpoint: auto   # auto-discovers latest runs/mgpt2_custom_tokenizer_*/model_*.pt
+
+tokenizer:
+  kind: mgpt2_regex_bpe
+  model_file: tokenizer/artifacts/mgpt2.model
+
+data:
+  shards_dir: data/shards_sft
+
+train:
+  seed: 1337
+  batch_size: 64          # examples per gradient step
+  micro_batch_size: 8     # H100 80GB — grad_accum_steps = 64 / 8 = 8
+  epochs: 3               # ~1,263 gradient steps total (26,951 examples / 64 batch × 3 epochs)
+  # max_steps is absent — derived from epochs × (N // batch_size)
+  warmup_steps: 50
+  max_lr: 3.0e-4          # 10× lower than pretrain (3e-3)
+  min_lr_ratio: 0.1
+  weight_decay: 0.1
+  eval_interval: 50

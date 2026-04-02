@@ -1,0 +1,26 @@
+# Smoke-test config — SFT (mgpt2)
+# Runs 5 gradient steps to verify the full run_sft → train_sft pipeline
+# end-to-end before committing to the production run.
+
+name: mgpt2_smoke
+
+model:
+  pretrained_checkpoint: auto   # auto-discovers latest mgpt2 pretrain checkpoint (smoke ok)
+
+tokenizer:
+  kind: mgpt2_regex_bpe
+  model_file: tokenizer/artifacts/mgpt2.model
+
+data:
+  shards_dir: data/shards_sft
+
+train:
+  seed: 1337
+  batch_size: 8
+  micro_batch_size: 4     # grad_accum_steps = 2
+  max_steps: 5            # override epochs for a quick 5-step smoke test
+  warmup_steps: 2
+  max_lr: 3.0e-4
+  min_lr_ratio: 0.1
+  weight_decay: 0.1
+  eval_interval: 2
