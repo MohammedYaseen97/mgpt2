@@ -1,7 +1,8 @@
 """Phase B check — tokenized shard integrity.
 
 Verifies every invariant that DATA_REFERENCE.md specifies for the tokenized
-output artifacts produced by tokenize_shards.py and tokenize_sft_shards.py.
+output artifacts produced by tokenize_shards.py, tokenize_sft_shards.py,
+and tokenize_dpo_shards.py.
 
 Checks
 ------
@@ -25,9 +26,16 @@ Checks
        • at least one mask=1 per example  (no all-prompt/all-pad rows)
    - first-row spot-check on all other train shards: same four invariants
 
-3. DPO shards
-   SKIP — data/shards_dpo/ does not exist yet.  tokenize_dpo_shards.py has not
-   been implemented; rejected responses are deferred to Phase E.
+3. DPO shards  (data/shards_dpo/)
+   SKIP if directory absent — tokenize_dpo_shards.py must be run first
+   (requires generate_dpo_rejected.py to have populated rejected fields after
+   Phase C).  When present, checks:
+   - manifest present and contains all required keys
+   - triple _chosen.npy + _rejected.npy + _prompt_lens.npy match manifest counts
+   - chosen/rejected: dtype=int32, ndim=2, shape (N, 1024)
+   - prompt_lens: dtype=int32, ndim=1, shape (N,), values in [1, 1023]
+   - chosen[i, :prompt_lens[i]] == rejected[i, :prompt_lens[i]]  (same prompt prefix)
+   - tokens in [0, 50256]; chosen ≠ rejected (at least one response differs)
 
 Exit code
    0  all checks passed
@@ -298,23 +306,23 @@ def _check_sft_dir(shards_dir: Path) -> None:
     m = json.loads(m_path.read_text(encoding="utf-8"))
 
     required_keys = {
-        "tokenizer", "tokenizer_artifact", "seq_len", "pad_token",
-        "n_train_shards", "n_val_shards", "n_train_examples", "n_val_examples",
-        "dtype", "array_shape",
+        "source", "tokenizer", "tokenizer_artifact", "seed",
+        "n_train_examples", "n_val_examples", "max_seq_len",
+        "n_train_shards", "n_val_shards", "dtype",
     }
 
     def manifest_keys():
         missing = required_keys - set(m.keys())
         assert not missing, f"manifest missing keys: {sorted(missing)}"
-    def manifest_pad_token():
-        assert m.get("pad_token") == EOT, (
-            f"pad_token={m.get('pad_token')}, expected {EOT}"
+    def manifest_seq_len():
+        assert m.get("max_seq_len") == 1024, (
+            f"max_seq_len={m.get('max_seq_len')}, expected 1024"
         )
     def manifest_dtype():
         assert m.get("dtype") == "int32", f"dtype={m.get('dtype')!r}"
-    _chk(f"{tag}/manifest_keys",      manifest_keys)
-    _chk(f"{tag}/manifest_pad_token", manifest_pad_token)
-    _chk(f"{tag}/manifest_dtype",     manifest_dtype)
+    _chk(f"{tag}/manifest_keys",    manifest_keys)
+    _chk(f"{tag}/manifest_seq_len", manifest_seq_len)
+    _chk(f"{tag}/manifest_dtype",   manifest_dtype)
 
     n_train_expect = m.get("n_train_shards", -1)
     n_val_expect   = m.get("n_val_shards",   -1)
@@ -354,6 +362,140 @@ def _check_sft_dir(shards_dir: Path) -> None:
         _check_sft_shard_pair(tp, mp, full_scan=True)
 
 # ---------------------------------------------------------------------------
+# 3. DPO shards
+# ---------------------------------------------------------------------------
+
+def _check_dpo_dir(shards_dir: Path) -> None:
+    tag = shards_dir.name
+
+    if not shards_dir.exists():
+        print(f"  SKIP  {tag}/ — directory absent; run generate_dpo_rejected.py then "
+              "tokenize_dpo_shards.py after Phase C.")
+        return
+
+    print(f"\n  [{tag}]")
+
+    m_path = shards_dir / "manifest.json"
+
+    def manifest_exists():
+        assert m_path.exists(), f"manifest not found: {m_path}"
+    if not _chk(f"{tag}/manifest_exists", manifest_exists):
+        print(f"  SKIP  {tag}/* — cannot proceed without manifest")
+        return
+
+    m = json.loads(m_path.read_text(encoding="utf-8"))
+
+    required_keys = {
+        "source", "tokenizer", "tokenizer_artifact", "seed",
+        "n_train_pairs", "n_val_pairs", "max_seq_len",
+        "n_train_shards", "n_val_shards", "dtype",
+    }
+
+    def manifest_keys():
+        missing = required_keys - set(m.keys())
+        assert not missing, f"manifest missing keys: {sorted(missing)}"
+    def manifest_seq_len():
+        assert m.get("max_seq_len") == 1024, (
+            f"max_seq_len={m.get('max_seq_len')}, expected 1024"
+        )
+    def manifest_dtype():
+        assert m.get("dtype") == "int32", f"dtype={m.get('dtype')!r}"
+    _chk(f"{tag}/manifest_keys",    manifest_keys)
+    _chk(f"{tag}/manifest_seq_len", manifest_seq_len)
+    _chk(f"{tag}/manifest_dtype",   manifest_dtype)
+
+    n_train_expect = m.get("n_train_shards", -1)
+    n_val_expect   = m.get("n_val_shards",   -1)
+
+    # file counts
+    train_chosen   = sorted(shards_dir.glob("train_*_chosen.npy"))
+    train_rejected = sorted(shards_dir.glob("train_*_rejected.npy"))
+    train_lens     = sorted(shards_dir.glob("train_*_prompt_lens.npy"))
+    val_chosen     = sorted(shards_dir.glob("val_*_chosen.npy"))
+    val_rejected   = sorted(shards_dir.glob("val_*_rejected.npy"))
+    val_lens       = sorted(shards_dir.glob("val_*_prompt_lens.npy"))
+
+    for split, c, r, l, n_exp in [
+        ("train", train_chosen, train_rejected, train_lens, n_train_expect),
+        ("val",   val_chosen,   val_rejected,   val_lens,   n_val_expect),
+    ]:
+        def _count(arr, label, n=n_exp, s=split, la=split):
+            def _fn(): assert len(arr) == n, f"found {len(arr)} {label} files, expected {n}"
+            return _fn
+        _chk(f"{tag}/n_{split}_chosen",   _count(c, "chosen"))
+        _chk(f"{tag}/n_{split}_rejected", _count(r, "rejected"))
+        _chk(f"{tag}/n_{split}_lens",     _count(l, "prompt_lens"))
+
+    # per-shard checks: full scan on first train shard + all val; row-0 on rest
+    all_triplets = (
+        [(c, r, l, True)  for c, r, l in zip(train_chosen[:1], train_rejected[:1], train_lens[:1])] +
+        [(c, r, l, False) for c, r, l in zip(train_chosen[1:], train_rejected[1:], train_lens[1:])] +
+        [(c, r, l, True)  for c, r, l in zip(val_chosen,       val_rejected,       val_lens)]
+    )
+
+    for c_path, r_path, l_path, full_scan in all_triplets:
+        stem   = c_path.name.replace("_chosen.npy", "")
+        prefix = f"{tag}/{stem}"
+
+        chosen   = _mmap(c_path)
+        rejected = _mmap(r_path)
+        lens     = _mmap(l_path)
+
+        # dtype
+        _chk(f"{prefix}/dtype_chosen",   lambda a=chosen:   a.dtype == np.int32 or (_ for _ in ()).throw(AssertionError(f"dtype={a.dtype}")))
+        _chk(f"{prefix}/dtype_rejected", lambda a=rejected: a.dtype == np.int32 or (_ for _ in ()).throw(AssertionError(f"dtype={a.dtype}")))
+        _chk(f"{prefix}/dtype_lens",     lambda a=lens:     a.dtype == np.int32 or (_ for _ in ()).throw(AssertionError(f"dtype={a.dtype}")))
+
+        def shapes(c=chosen, r=rejected, l=lens):
+            assert c.ndim == 2,              f"chosen ndim={c.ndim}, expected 2"
+            assert r.ndim == 2,              f"rejected ndim={r.ndim}, expected 2"
+            assert l.ndim == 1,              f"prompt_lens ndim={l.ndim}, expected 1"
+            assert c.shape == r.shape,       f"chosen {c.shape} != rejected {r.shape}"
+            assert c.shape[0] == len(l),     f"chosen N={c.shape[0]} != len(lens)={len(l)}"
+            assert c.shape[1] == 1024,       f"seq_len={c.shape[1]}, expected 1024"
+        _chk(f"{prefix}/shapes", shapes)
+
+        # load rows for scanning
+        if full_scan:
+            c_rows = np.array(chosen)
+            r_rows = np.array(rejected)
+            l_vals = np.array(lens)
+        else:
+            c_rows = np.array(chosen[:1])
+            r_rows = np.array(rejected[:1])
+            l_vals = np.array(lens[:1])
+
+        scan = "full" if full_scan else "row0"
+
+        def token_range(c=c_rows, r=r_rows):
+            for arr, name in [(c, "chosen"), (r, "rejected")]:
+                lo, hi = int(arr.min()), int(arr.max())
+                assert lo >= 0,            f"[{scan}] {name}: token ID < 0 (min={lo})"
+                assert hi <= MAX_TOKEN_ID, f"[{scan}] {name}: token ID > {MAX_TOKEN_ID} (max={hi})"
+        _chk(f"{prefix}/token_range/{scan}", token_range)
+
+        def prompt_lens_range(l=l_vals):
+            assert int(l.min()) >= 1,    f"[{scan}] prompt_len < 1 (min={int(l.min())})"
+            assert int(l.max()) < 1024,  f"[{scan}] prompt_len >= 1024 (max={int(l.max())})"
+        _chk(f"{prefix}/prompt_lens_range/{scan}", prompt_lens_range)
+
+        def prompt_prefix_match(c=c_rows, r=r_rows, l=l_vals):
+            for i in range(len(c)):
+                pl = int(l[i])
+                assert (c[i, :pl] == r[i, :pl]).all(), (
+                    f"[{scan}] row {i}: chosen/rejected prompt prefix mismatch at prompt_len={pl}"
+                )
+        _chk(f"{prefix}/prompt_prefix_match/{scan}", prompt_prefix_match)
+
+        def responses_differ(c=c_rows, r=r_rows):
+            n_same = sum(1 for i in range(len(c)) if (c[i] == r[i]).all())
+            assert n_same == 0, (
+                f"[{scan}] {n_same}/{len(c)} pairs have identical chosen == rejected"
+            )
+        _chk(f"{prefix}/responses_differ/{scan}", responses_differ)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -367,6 +509,8 @@ def parse_args() -> argparse.Namespace:
                    help="Skip pretraining shard checks (still fast; 465 header-only reads + spot samples).")
     p.add_argument("--skip-sft",      action="store_true",
                    help="Skip SFT shard checks.")
+    p.add_argument("--skip-dpo",      action="store_true",
+                   help="Skip DPO shard checks.")
     return p.parse_args()
 
 
@@ -391,7 +535,8 @@ def main() -> None:
         _check_sft_dir(data / "shards_sft")
 
     print("\n[3] DPO shards")
-    print("  SKIP  data/shards_dpo/ — not yet generated (rejected side deferred to Phase E)")
+    if not args.skip_dpo:
+        _check_dpo_dir(data / "shards_dpo")
 
     # summary
     print("\n" + "=" * 60)
