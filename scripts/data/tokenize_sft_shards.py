@@ -257,23 +257,20 @@ def _write_manifest(
 ) -> None:
     model_path = REPO_ROOT / "tokenizer" / "artifacts" / "mgpt2.model"
     manifest = {
+        "source":             "ai4bharat/indic-align (Dolly_T + OpenAssistant_T + Anudesh)",
         "tokenizer":          "mgpt2",
         "tokenizer_artifact": {
             "path":   str(model_path.relative_to(REPO_ROOT)),
             "sha256": _sha256(model_path),
         },
-        "source_train":       str((sft_dir / "train.jsonl").relative_to(REPO_ROOT)),
-        "source_val":         str((sft_dir / "val.jsonl").relative_to(REPO_ROOT)),
-        "seq_len":            seq_len,
-        "pad_token":          50256,
-        "shard_examples":     shard_examples,
-        "n_train_shards":     n_train_shards,
-        "n_val_shards":       n_val_shards,
+        "seed":               42,
         "n_train_examples":   n_train_examples,
         "n_val_examples":     n_val_examples,
+        "max_seq_len":        seq_len,
+        "n_train_shards":     n_train_shards,
+        "n_val_shards":       n_val_shards,
         "n_skipped":          n_skipped,
         "dtype":              "int32",
-        "array_shape":        f"(N_examples_in_shard, {seq_len})",
     }
     path = shards_dir / "manifest.json"
     path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
