@@ -15,8 +15,8 @@ train:
   seed: 1337
   block_size: 1024
   total_batch_size: 524288   # effective gradient-step size (tokens)
-  micro_batch_size: 16       # 4xL4 24GB — grad_accum_steps = 524288 / (16*1024*4) = 8
-  # micro_batch_size: 64       # H100 80GB
+  # micro_batch_size: 16       # 4xL4 24GB  — grad_accum_steps = 524288 / (16*1024*4) = 8
+  micro_batch_size: 64       # 1xH100 80GB — grad_accum_steps = 524288 / (64*1024*1) = 8
   # max_steps is FIXED to match the baseline run (27,538 steps = 14.44B tokens).
   # Cloud mgpt2 shards derive ~24,695 steps from manifest (slight rebuild difference vs local).
   # Extra ~2,843 steps cycle through data once more (~11.5% partial second pass) — harmless.
