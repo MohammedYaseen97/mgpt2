@@ -89,12 +89,12 @@ All data work lives here; downstream training phases consume these outputs and a
 - ✓ `scripts/data/build_sft_data.py` — streams ai4bharat/indic-align (Dolly_T + OpenAssistant_T + Anudesh); 30K examples; language distribution mirrors pretraining (55/18/7/13/7); disjoint row partitioning across language variants; swap-correction heuristic for Latin-script columns; global shuffle + 90/10 train/val split → `data/sft/`
 - ✓ `scripts/data/tokenize_sft_shards.py` — mgpt2 only; seq_len=1024; EOT padding (token 50256); 2D shards shape (N, 1024) int32; paired `_tokens.npy` + `_mask.npy` per shard (mask=0 prompt, mask=1 response+EOT) → `data/shards_sft/`
 
-### DPO corpus ✓ build script complete
+### DPO corpus ✓ scripts complete
 - ✓ `scripts/data/build_dpo_data.py` — streams ai4bharat/indic-align (HHRLHF_T primary + Toxic_Matrix supplementary); 14,999 pairs; language distribution mirrors pretraining (55/18/13/7/7); disjoint row partitioning; swap-correction heuristic for Latin columns; global shuffle + 90/10 train/val split → `data/dpo/`
-  - **Deferred rejected**: both toxic configs only provide the chosen (safe refusal) side. The `rejected` field is written as `""` and populated later by `scripts/generate_dpo_rejected.py` after Phase C produces a checkpoint. `tokenize_dpo_shards.py` will assert `rejected_populated=true` in the manifest before proceeding.
-- [TODO] implement `scripts/generate_dpo_rejected.py` — runs Phase C pretrained model on each toxic prompt to generate the `rejected` completions; updates `data/dpo/manifest.json` flag
-- [TODO] implement `scripts/data/tokenize_dpo_shards.py`
-  - tokenizes chosen/rejected pairs; chosen/rejected alignment must be maintained across shards; must assert `rejected_populated=true` before running
+  - **Deferred rejected**: both toxic configs only provide the chosen (safe refusal) side. The `rejected` field is written as `""` and populated later by `scripts/generate_dpo_rejected.py` after Phase C produces a checkpoint. `tokenize_dpo_shards.py` asserts `rejected_populated=true` in the manifest before proceeding.
+- ✓ `scripts/generate_dpo_rejected.py` — loads Phase C pretrained mgpt2 checkpoint; batched inference on each toxic prompt; fills `rejected` field in-place; resumable (skips already-populated examples); flips `rejected_populated=true` in manifest only after full completion
+- ✓ `scripts/data/tokenize_dpo_shards.py` — asserts `rejected_populated=true`; mgpt2 only; 3 arrays per shard: `{split}_{idx:06d}_chosen.npy`, `_rejected.npy`, `_prompt_lens.npy` — shapes `(N, 1024)` int32 and `(N,)` int32 respectively; chosen/rejected/prompt_lens always aligned at index i
+  - [TODO] run after Phase C checkpoint is available
 
 ### Checks
 - ✓ `scripts/checks/check_shards.py` — verifies dtype, token ranges, shard sizes, document parity across tokenizers; skips DPO shards (deferred)
@@ -162,7 +162,7 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 1) ~~Finish Phase A (final mgpt2 tokenizer + tokenizer_eval.json)~~ ✓ done
 2) ~~Implement Phase B data pipeline — pretraining corpus (build + tokenize shards)~~ ✓ done
 3) ~~Implement Phase B SFT corpus (build_sft_data + tokenize_sft_shards)~~ ✓ done
-4) Implement Phase B DPO corpus (generate_dpo_rejected + tokenize_dpo_shards) — after Phase C produces a checkpoint
+4) ~~Implement Phase B DPO corpus scripts (generate_dpo_rejected + tokenize_dpo_shards)~~ ✓ done — run both after Phase C produces a checkpoint
 5) ~~Implement Phase C scripts + eval (run_pretrain, lm_eval, hellaswag_eval, checks)~~ ✓ done
 6) Run full Phase C training on H100 (baseline + mgpt2); write `reports/01_pretrain_report.md`
 7) ~~Implement Phase D scripts (run_sft, train_sft, sft_eval, configs)~~ ✓ done

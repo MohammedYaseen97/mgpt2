@@ -43,7 +43,7 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
   - mask: 0 for prompt tokens, 1 for response tokens + EOT, 0 for padding
   - default 1000 examples/shard → `data/shards_sft/`
 
-### DPO corpus ✓ build script complete
+### DPO corpus ✓ scripts complete
 
 - `build_dpo_data.py` ✓
   - streams `ai4bharat/indic-align` configs `HHRLHF_T` (primary, 32.6K rows — real Anthropic HH-RLHF human prompts) and optionally `Toxic_Matrix` (supplementary, 90.3K rows — synthetic; opt-in via `--add-toxic-matrix`)
@@ -55,14 +55,20 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
   - output fields per example: `{"prompt": "…", "chosen": "…", "rejected": "", "lang": "hin_Deva"}`
   - actual run: 14,999 pairs (1 skip — empty column); HHRLHF_T alone sufficient, Toxic_Matrix not downloaded
 
-- `generate_dpo_rejected.py` — **[TODO]** runs Phase C pretrained model on each toxic prompt; fills `rejected` field in-place; updates `manifest.json` → `rejected_populated: true`
+- `generate_dpo_rejected.py` ✓
+  - loads Phase C pretrained mgpt2 checkpoint (auto-discovers latest or accepts `--checkpoint`)
+  - batched inference (`--batch-size 32` default) with left-padding; `--temperature 0.9 --top-k 50` default
+  - fills `rejected` field in-place; **resumable** — skips examples already having non-empty `rejected`
+  - flushes progress every `--save-interval` examples; flips `manifest.json → rejected_populated: true` only after verifying every example is populated
+  - [TODO] run after Phase C checkpoint is available
 
-- `tokenize_dpo_shards.py` — **[TODO]**
-  - asserts `rejected_populated=true` in manifest before starting
+- `tokenize_dpo_shards.py` ✓
+  - hard-asserts `rejected_populated=true` in manifest before starting; exits with clear error if not
   - **mgpt2 only** — same reasoning as SFT
-  - tokenizes paired prompt+chosen and prompt+rejected sequences; records `prompt_lens` per example
-  - output per shard: triple `{split}_{idx:06d}_chosen.npy` + `_rejected.npy` + `_prompt_lens.npy`, all shape `(N, 1024)` int32
-  - chosen/rejected alignment must be maintained — `chosen[i]`, `rejected[i]`, `prompt_lens[i]` always same prompt
+  - sequence layout: `[prompt | response | EOT | EOT-padding…]`; prompt flows directly into response (no EOT separator)
+  - output per shard: three parallel arrays — `{split}_{idx:06d}_chosen.npy` (N, 1024) int32, `_rejected.npy` (N, 1024) int32, `_prompt_lens.npy` (N,) int32
+  - pairs skipped as a unit if either side cannot fit — `chosen[i]`, `rejected[i]`, `prompt_lens[i]` are always the same prompt
+  - [TODO] run after `generate_dpo_rejected.py` completes
 
 ---
 
