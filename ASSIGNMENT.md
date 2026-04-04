@@ -94,7 +94,7 @@ All data work lives here; downstream training phases consume these outputs and a
   - **Deferred rejected**: both toxic configs only provide the chosen (safe refusal) side. The `rejected` field is written as `""` and populated later by `scripts/generate_dpo_rejected.py` after Phase C produces a checkpoint. `tokenize_dpo_shards.py` asserts `rejected_populated=true` in the manifest before proceeding.
 - ✓ `scripts/generate_dpo_rejected.py` — loads Phase C pretrained mgpt2 checkpoint; batched inference on each toxic prompt; fills `rejected` field in-place; resumable (skips already-populated examples); flips `rejected_populated=true` in manifest only after full completion
 - ✓ `scripts/data/tokenize_dpo_shards.py` — asserts `rejected_populated=true`; mgpt2 only; 3 arrays per shard: `{split}_{idx:06d}_chosen.npy`, `_rejected.npy`, `_prompt_lens.npy` — shapes `(N, 1024)` int32 and `(N,)` int32 respectively; chosen/rejected/prompt_lens always aligned at index i
-  - [TODO] run after Phase C checkpoint is available
+  - ✓ run after Phase C checkpoint is available
 
 ### Checks
 - ✓ `scripts/checks/check_shards.py` — verifies dtype, token ranges, shard sizes, document parity across tokenizers; skips DPO shards (deferred)
@@ -114,7 +114,7 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 - ✓ `scripts/run_pretrain.py` — orchestrates training via `train.py`; YAML config driven; records git hash, tokenizer SHA-256, derives max_steps from shard manifest
 - ✓ `eval/lm_eval.py` — streaming perplexity overall + bucketed (latin/deva/knda/mixed); memory-efficient rolling-buffer tokenization
 - ✓ `eval/hellaswag_eval.py` — full 10,042-example HellaSwag for both models using each model's own tokenizer; JSON output with metadata
-- [TODO] write `reports/01_pretrain_report.md`
+- ✓ write `reports/01_pretrain_report.md`
 
 ### Checks
 - ✓ `scripts/checks/check_pretrain_run.py` verifies:
@@ -133,7 +133,7 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 - ✓ `eval/sft_eval.py` — full val masked loss (all val examples, properly weighted) + fixed 10-prompt multilingual generation suite (2 prompts × 5 language variants); JSON output
 - ✓ `configs/sft_mgpt2.yaml` — production config (H100: batch_size=64, micro_batch_size=8, epochs=3, max_lr=3e-4)
 - ✓ `configs/sft_mgpt2_smoke.yaml` — smoke config verified end-to-end
-- [TODO] run full Phase D training (after Phase C production run); write `reports/02_sft_report.md`
+- ✓ run full Phase D training (after Phase C production run); write `reports/02_sft_report.md`
 
 ---
 
@@ -145,19 +145,27 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 - ✓ `eval/dpo_eval.py` — preference win-rate on DPO val pairs + SFT regression check (masked CE on SFT val shards for both DPO model and SFT reference); JSON output
 - ✓ `configs/dpo_mgpt2.yaml` — production config (H100: batch_size=32, micro_batch_size=4, beta=0.1, max_lr=1e-6, epochs=1)
 - ✓ `configs/dpo_mgpt2_smoke.yaml` — smoke config verified end-to-end
-- [TODO] run full Phase E DPO training on H100 (after Phase D production run); write `reports/03_dpo_report.md`
+- ✓ run full Phase E DPO training on H100 (after Phase D production run); write `reports/03_dpo_report.md`
 
 ---
 
-## Phase F — Publish to HF
+## Phase F — Publish to HF ✓ COMPLETE
 
 ### Tokenizer (already scaffolded)
-- `tokenizer/scripts/publish_hf.py` can publish trained + evaluated tokenizer.
+- ✓ `tokenizer/scripts/publish_hf.py` — published to [ace-1/mgpt2-tokenizer](https://huggingface.co/ace-1/mgpt2-tokenizer)
 
 ### Model
 - ✓ `scripts/publish_model_hf.py` — publishes any of the 3 stages (pretrain / sft / dpo) as a separate HF repo
   - pushes checkpoint (`pytorch_model.pt`), `model.py`, `config.json`, tokenizer files (mgpt2 only), README model card
   - auto-discovers latest run dir for the given stage; accepts `--dry-run` for inspection before upload
+
+### Published repos
+| Stage | Hugging Face repo |
+|---|---|
+| Tokenizer | [ace-1/mgpt2-tokenizer](https://huggingface.co/ace-1/mgpt2-tokenizer) |
+| Pretrained | [ace-1/mgpt2-pretrain](https://huggingface.co/ace-1/mgpt2-pretrain) |
+| SFT | [ace-1/mgpt2-sft](https://huggingface.co/ace-1/mgpt2-sft) |
+| DPO (recommended) | [ace-1/mgpt2-dpo](https://huggingface.co/ace-1/mgpt2-dpo) |
 
 ---
 
@@ -167,10 +175,10 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 3) ~~Implement Phase B SFT corpus (build_sft_data + tokenize_sft_shards)~~ ✓ done
 4) ~~Implement Phase B DPO corpus scripts (generate_dpo_rejected + tokenize_dpo_shards)~~ ✓ done — run both after Phase C produces a checkpoint
 5) ~~Implement Phase C scripts + eval (run_pretrain, lm_eval, hellaswag_eval, checks)~~ ✓ done
-6) Run full Phase C training on H100 (baseline + mgpt2); write `reports/01_pretrain_report.md`
+6) ~~Run full Phase C training on H100 (baseline + mgpt2); write `reports/01_pretrain_report.md`~~ ✓ done
 7) ~~Implement Phase D scripts (run_sft, train_sft, sft_eval, configs)~~ ✓ done
-8) Run full Phase D SFT training on H100 (after Phase C); write `reports/02_sft_report.md`
+8) ~~Run full Phase D SFT training on H100 (after Phase C); write `reports/02_sft_report.md`~~ ✓ done
 9) ~~Implement Phase E (DPO) scripts (run_dpo, train_dpo, eval/dpo_eval, configs)~~ ✓ done
-10) Run full Phase E DPO training on H100 (after Phase D); write `reports/03_dpo_report.md`
-11) Write `reports/04_final_comparison.md`
-12) Publish models to HF (after all runs)
+10) ~~Run full Phase E DPO training on H100 (after Phase D); write `reports/03_dpo_report.md`~~ ✓ done
+11) ~~Write `reports/04_final_comparison.md`~~ ✓ done
+12) ~~Publish models to HF (after all runs)~~ ✓ done — see Phase F for repo links

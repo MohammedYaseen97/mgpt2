@@ -60,7 +60,7 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
   - batched inference (`--batch-size 32` default) with left-padding; `--temperature 0.9 --top-k 50` default
   - fills `rejected` field in-place; **resumable** — skips examples already having non-empty `rejected`
   - flushes progress every `--save-interval` examples; flips `manifest.json → rejected_populated: true` only after verifying every example is populated
-  - [TODO] run after Phase C checkpoint is available
+  - ✓ run after Phase C checkpoint is available
 
 - `tokenize_dpo_shards.py` ✓
   - hard-asserts `rejected_populated=true` in manifest before starting; exits with clear error if not
@@ -68,7 +68,7 @@ Downstream training phases (C, D, E) consume outputs from this directory and add
   - sequence layout: `[prompt | response | EOT | EOT-padding…]`; prompt flows directly into response (no EOT separator)
   - output per shard: three parallel arrays — `{split}_{idx:06d}_chosen.npy` (N, 1024) int32, `_rejected.npy` (N, 1024) int32, `_prompt_lens.npy` (N,) int32
   - pairs skipped as a unit if either side cannot fit — `chosen[i]`, `rejected[i]`, `prompt_lens[i]` are always the same prompt
-  - [TODO] run after `generate_dpo_rejected.py` completes
+  - ✓ run after `generate_dpo_rejected.py` completes
 
 ---
 

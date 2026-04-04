@@ -45,8 +45,8 @@ labelled explicitly as non-controlled in any report:
   - full val masked loss (all val examples, properly weighted per response token)
   - fixed 10-prompt multilingual generation suite (2 prompts × 5 language variants: eng_Latn, hin_Deva, hin_Latn, kan_Knda, kan_Latn)
 
-- `dpo_eval.py`
-  - [TODO] preference win-rate/accuracy on held-out pairs + SFT loss regression check
+- `dpo_eval.py` ✓
+  - preference win-rate/accuracy on held-out pairs + SFT loss regression check (Δ < 5% threshold)
 
 ---
 
