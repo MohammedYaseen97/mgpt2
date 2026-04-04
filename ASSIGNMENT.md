@@ -137,12 +137,15 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 
 ---
 
-## Phase E — DPO (alignment)
+## Phase E — DPO (alignment) ✓ scripts complete
 
-### Your tasks (TODO)
-- [TODO] implement `scripts/run_dpo.py`
-- [TODO] implement `eval/dpo_eval.py` (win-rate + regression checks)
-- [TODO] write `reports/03_dpo_report.md`
+### Your tasks
+- ✓ `scripts/run_dpo.py` — orchestrates DPO via `train_dpo.py`; YAML config driven; auto-discovers Phase D SFT checkpoint; records git hash + SFT checkpoint SHA-256; calls `eval/dpo_eval.py` post-training
+- ✓ `train_dpo.py` — Bradley-Terry DPO loss; frozen SFT reference model; cosine LR schedule; `sequence_logprob` response-mask with correct off-by-one and EOT-boundary logic; win-rate + DPO loss logged at each eval step; checkpoints at epoch boundaries + final step
+- ✓ `eval/dpo_eval.py` — preference win-rate on DPO val pairs + SFT regression check (masked CE on SFT val shards for both DPO model and SFT reference); JSON output
+- ✓ `configs/dpo_mgpt2.yaml` — production config (H100: batch_size=32, micro_batch_size=4, beta=0.1, max_lr=1e-6, epochs=1)
+- ✓ `configs/dpo_mgpt2_smoke.yaml` — smoke config verified end-to-end
+- [TODO] run full Phase E DPO training on H100 (after Phase D production run); write `reports/03_dpo_report.md`
 
 ---
 
@@ -167,4 +170,7 @@ The HF GPT-2 model is a contextual reference only (different training data); it 
 6) Run full Phase C training on H100 (baseline + mgpt2); write `reports/01_pretrain_report.md`
 7) ~~Implement Phase D scripts (run_sft, train_sft, sft_eval, configs)~~ ✓ done
 8) Run full Phase D SFT training on H100 (after Phase C); write `reports/02_sft_report.md`
-9) Implement Phase E (DPO) — `scripts/run_dpo.py`, `eval/dpo_eval.py`, report
+9) ~~Implement Phase E (DPO) scripts (run_dpo, train_dpo, eval/dpo_eval, configs)~~ ✓ done
+10) Run full Phase E DPO training on H100 (after Phase D); write `reports/03_dpo_report.md`
+11) Write `reports/04_final_comparison.md`
+12) Publish models to HF (after all runs)

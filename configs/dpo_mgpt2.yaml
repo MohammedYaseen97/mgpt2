@@ -1,0 +1,20 @@
+name: dpo_mgpt2_custom_tokenizer
+
+sft_checkpoint: auto   # auto-discovers latest Phase D SFT run checkpoint
+
+tokenizer:
+  kind: mgpt2
+  model_file: tokenizer/artifacts/mgpt2.model
+
+train:
+  seed: 1337
+  shards_dir: data/shards_dpo
+  batch_size: 32          # pairs per gradient step; grad_accum = 32 // 4 = 8
+  micro_batch_size: 4     # H100 80GB — 4 pairs × 2 sequences (chosen+rejected) × 4 passes = manageable
+  beta: 0.1               # DPO temperature; standard starting point
+  max_lr: 1.0e-6          # much lower than SFT — DPO is sensitive to large updates
+  min_lr_ratio: 0.1
+  warmup_steps: 20
+  epochs: 1               # DPO typically converges in 1 epoch on small datasets
+  weight_decay: 0.1
+  eval_interval: 50
